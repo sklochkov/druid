@@ -19,21 +19,22 @@
 
 package org.apache.druid.rpc;
 
-import com.google.common.util.concurrent.Futures;
-import com.google.common.util.concurrent.ListenableFuture;
-import org.apache.druid.java.util.common.Either;
-import org.apache.druid.java.util.http.client.response.ClientResponse;
-import org.apache.druid.java.util.http.client.response.HttpResponseHandler;
-import org.jboss.netty.buffer.ChannelBuffers;
-import org.jboss.netty.handler.codec.http.DefaultHttpResponse;
-import org.jboss.netty.handler.codec.http.HttpResponse;
-import org.jboss.netty.handler.codec.http.HttpResponseStatus;
-import org.jboss.netty.handler.codec.http.HttpVersion;
-import org.junit.Assert;
-
 import java.util.ArrayDeque;
 import java.util.Map;
 import java.util.Queue;
+
+import com.google.common.util.concurrent.Futures;
+import com.google.common.util.concurrent.ListenableFuture;
+import io.netty.buffer.ChannelBuffers;
+import io.netty.handler.codec.http.DefaultHttpResponse;
+import io.netty.handler.codec.http.HttpResponse;
+import io.netty.handler.codec.http.HttpResponseStatus;
+import io.netty.handler.codec.http.HttpVersion;
+import org.junit.Assert;
+
+import org.apache.druid.java.util.common.Either;
+import org.apache.druid.java.util.http.client.response.ClientResponse;
+import org.apache.druid.java.util.http.client.response.HttpResponseHandler;
 
 /**
  * Mock implementation of {@link ServiceClient}.

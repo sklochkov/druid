@@ -19,6 +19,14 @@
 
 package org.apache.druid.server.initialization;
 
+import java.net.URL;
+import java.util.Enumeration;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.atomic.AtomicLong;
+import javax.servlet.FilterConfig;
+import javax.servlet.ServletContext;
+
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
@@ -28,6 +36,13 @@ import com.google.inject.Binder;
 import com.google.inject.Injector;
 import com.google.inject.Key;
 import com.google.inject.Module;
+import io.netty.handler.codec.http.HttpMethod;
+import org.eclipse.jetty.server.Server;
+import org.eclipse.jetty.servlets.QoSFilter;
+import org.eclipse.jetty.util.thread.QueuedThreadPool;
+import org.junit.Assert;
+import org.junit.Test;
+
 import org.apache.druid.guice.GuiceInjectors;
 import org.apache.druid.guice.Jerseys;
 import org.apache.druid.guice.JsonConfigProvider;
@@ -45,20 +60,6 @@ import org.apache.druid.server.initialization.jetty.JettyBindings;
 import org.apache.druid.server.initialization.jetty.JettyServerInitializer;
 import org.apache.druid.server.security.AuthTestUtils;
 import org.apache.druid.server.security.AuthorizerMapper;
-import org.eclipse.jetty.server.Server;
-import org.eclipse.jetty.servlets.QoSFilter;
-import org.eclipse.jetty.util.thread.QueuedThreadPool;
-import org.jboss.netty.handler.codec.http.HttpMethod;
-import org.junit.Assert;
-import org.junit.Test;
-
-import javax.servlet.FilterConfig;
-import javax.servlet.ServletContext;
-import java.net.URL;
-import java.util.Enumeration;
-import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.atomic.AtomicLong;
 
 public class JettyQosTest extends BaseJettyTest
 {

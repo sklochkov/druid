@@ -21,6 +21,10 @@ package org.apache.druid.discovery;
 
 import com.google.common.base.Preconditions;
 import com.google.common.base.Throwables;
+import io.netty.channel.ChannelException;
+import io.netty.handler.codec.http.HttpHeaderNames;
+import io.netty.handler.codec.http.HttpMethod;
+import io.netty.handler.codec.http.HttpResponseStatus;
 import org.apache.druid.concurrent.LifecycleLock;
 import org.apache.druid.java.util.common.IOE;
 import org.apache.druid.java.util.common.ISE;
@@ -35,9 +39,6 @@ import org.apache.druid.java.util.http.client.response.FullResponseHolder;
 import org.apache.druid.java.util.http.client.response.HttpResponseHandler;
 import org.apache.druid.java.util.http.client.response.StringFullResponseHandler;
 import org.apache.druid.java.util.http.client.response.StringFullResponseHolder;
-import org.jboss.netty.channel.ChannelException;
-import org.jboss.netty.handler.codec.http.HttpMethod;
-import org.jboss.netty.handler.codec.http.HttpResponseStatus;
 
 import java.io.IOException;
 import java.net.MalformedURLException;
@@ -170,9 +171,9 @@ public class DruidLeaderClient
         request = getNewRequestUrlInvalidatingCache(request);
         continue;
       }
-      HttpResponseStatus responseStatus = fullResponseHolder.getResponse().getStatus();
+      HttpResponseStatus responseStatus = fullResponseHolder.getResponse().status();
       if (HttpResponseStatus.TEMPORARY_REDIRECT.equals(responseStatus)) {
-        String redirectUrlStr = fullResponseHolder.getResponse().headers().get("Location");
+        String redirectUrlStr = fullResponseHolder.getResponse().headers().get(HttpHeaderNames.LOCATION);
         if (redirectUrlStr == null) {
           throw new IOE("No redirect location is found in response from url[%s].", request.getUrl());
         }
@@ -230,7 +231,7 @@ public class DruidLeaderClient
       throw new ISE(ex, "Couldn't find leader.");
     }
 
-    if (responseHolder.getStatus().getCode() == 200) {
+    if (responseHolder.getStatus().code() == 200) {
       String leaderUrl = responseHolder.getContent();
 
       //verify this is valid url
@@ -249,7 +250,7 @@ public class DruidLeaderClient
 
     throw new ISE(
         "Couldn't find leader, failed response status is [%s] and content [%s].",
-        responseHolder.getStatus().getCode(),
+        responseHolder.getStatus().code(),
         responseHolder.getContent()
     );
   }

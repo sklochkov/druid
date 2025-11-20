@@ -40,7 +40,7 @@ import org.apache.druid.rpc.ServiceClientFactory;
 import org.apache.druid.rpc.ServiceLocation;
 import org.apache.druid.rpc.ServiceRetryPolicy;
 import org.apache.druid.utils.CloseableUtils;
-import org.jboss.netty.handler.codec.http.HttpMethod;
+import io.netty.handler.codec.http.HttpMethod;
 
 import javax.annotation.Nullable;
 import java.io.Closeable;

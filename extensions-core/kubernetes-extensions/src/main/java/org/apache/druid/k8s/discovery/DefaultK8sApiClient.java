@@ -68,7 +68,7 @@ public class DefaultK8sApiClient implements K8sApiClient
       coreV1Api.patchNamespacedPod(podName, podNamespace, new V1Patch(jsonPatchStr), "true", null, null, null, null);
     }
     catch (ApiException ex) {
-      throw new RE(ex, "Failed to patch pod[%s/%s], code[%d], error[%s].", podNamespace, podName, ex.getCode(), ex.getResponseBody());
+      throw new RE(ex, "Failed to patch pod[%s/%s], code[%d], error[%s].", podNamespace, podName, ex.code(), ex.getResponseBody());
     }
   }
 
@@ -91,7 +91,7 @@ public class DefaultK8sApiClient implements K8sApiClient
       return new DiscoveryDruidNodeList(podList.getMetadata().getResourceVersion(), allNodes);
     }
     catch (ApiException ex) {
-      throw new RE(ex, "Expection in listing pods, code[%d] and error[%s].", ex.getCode(), ex.getResponseBody());
+      throw new RE(ex, "Expection in listing pods, code[%d] and error[%s].", ex.code(), ex.getResponseBody());
     }
   }
 
@@ -190,12 +190,12 @@ public class DefaultK8sApiClient implements K8sApiClient
       };
     }
     catch (ApiException ex) {
-      if (ex.getCode() == 410) {
+      if (ex.code() == 410) {
         // k8s no longer has history that we need
         return null;
       }
 
-      throw new RE(ex, "Expection in watching pods, code[%d] and error[%s].", ex.getCode(), ex.getResponseBody());
+      throw new RE(ex, "Expection in watching pods, code[%d] and error[%s].", ex.code(), ex.getResponseBody());
     }
   }
 }

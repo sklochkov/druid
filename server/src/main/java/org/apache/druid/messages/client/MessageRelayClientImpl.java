@@ -22,6 +22,7 @@ package org.apache.druid.messages.client;
 import com.fasterxml.jackson.databind.JavaType;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.common.util.concurrent.ListenableFuture;
+import io.netty.handler.codec.http.HttpMethod;
 import org.apache.druid.common.guava.FutureUtils;
 import org.apache.druid.java.util.common.StringUtils;
 import org.apache.druid.java.util.common.jackson.JacksonUtils;
@@ -30,7 +31,6 @@ import org.apache.druid.messages.MessageBatch;
 import org.apache.druid.rpc.RequestBuilder;
 import org.apache.druid.rpc.ServiceClient;
 import org.eclipse.jetty.http.HttpStatus;
-import org.jboss.netty.handler.codec.http.HttpMethod;
 
 import java.util.Collections;
 
@@ -74,7 +74,7 @@ public class MessageRelayClientImpl<MessageType> implements MessageRelayClient<M
             new BytesFullResponseHandler()
         ),
         holder -> {
-          if (holder.getResponse().getStatus().getCode() == HttpStatus.NO_CONTENT_204) {
+          if (holder.getResponse().getStatus().code() == HttpStatus.NO_CONTENT_204) {
             return new MessageBatch<>(Collections.emptyList(), epoch, startWatermark);
           } else {
             return JacksonUtils.readValue(smileMapper, holder.getContent(), inMessageBatchType);

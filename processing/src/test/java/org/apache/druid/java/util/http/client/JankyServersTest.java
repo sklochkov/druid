@@ -20,13 +20,13 @@
 package org.apache.druid.java.util.http.client;
 
 import com.google.common.util.concurrent.ListenableFuture;
+import io.netty.channel.ChannelException;
+import io.netty.handler.codec.http.HttpMethod;
+import io.netty.handler.timeout.ReadTimeoutException;
 import org.apache.druid.java.util.common.StringUtils;
 import org.apache.druid.java.util.common.lifecycle.Lifecycle;
 import org.apache.druid.java.util.http.client.response.StatusResponseHandler;
 import org.apache.druid.java.util.http.client.response.StatusResponseHolder;
-import org.jboss.netty.channel.ChannelException;
-import org.jboss.netty.handler.codec.http.HttpMethod;
-import org.jboss.netty.handler.timeout.ReadTimeoutException;
 import org.joda.time.Duration;
 import org.junit.AfterClass;
 import org.junit.Assert;
@@ -413,7 +413,7 @@ public class JankyServersTest
           );
 
       expectedException.expect(ExecutionException.class);
-      expectedException.expectMessage("org.jboss.netty.channel.ChannelException: Faulty channel in resource pool");
+      expectedException.expectMessage("io.netty.channel.ChannelException: Faulty channel in resource pool");
 
       response.get();
     }

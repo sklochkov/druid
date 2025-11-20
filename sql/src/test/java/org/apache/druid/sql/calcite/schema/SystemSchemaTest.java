@@ -110,7 +110,7 @@ import org.apache.druid.timeline.SegmentId;
 import org.apache.druid.timeline.SegmentStatusInCluster;
 import org.apache.druid.timeline.partition.NumberedShardSpec;
 import org.easymock.EasyMock;
-import org.jboss.netty.handler.codec.http.HttpResponse;
+import io.netty.handler.codec.http.HttpResponse;
 import org.joda.time.DateTime;
 import org.junit.Assert;
 import org.junit.jupiter.api.AfterAll;

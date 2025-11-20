@@ -34,7 +34,7 @@ import org.apache.druid.testsEx.categories.Catalog;
 import org.apache.druid.testsEx.cluster.CatalogClient;
 import org.apache.druid.testsEx.cluster.DruidClusterClient;
 import org.apache.druid.testsEx.config.DruidTestRunner;
-import org.jboss.netty.handler.codec.http.HttpResponseStatus;
+import io.netty.handler.codec.http.HttpResponseStatus;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.experimental.categories.Category;

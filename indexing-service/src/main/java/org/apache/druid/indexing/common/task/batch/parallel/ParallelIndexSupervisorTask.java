@@ -90,7 +90,7 @@ import org.apache.druid.timeline.partition.NumberedShardSpec;
 import org.apache.druid.timeline.partition.PartitionBoundaries;
 import org.apache.druid.utils.CollectionUtils;
 import org.checkerframework.checker.nullness.qual.MonotonicNonNull;
-import org.jboss.netty.handler.codec.http.HttpResponseStatus;
+import io.netty.handler.codec.http.HttpResponseStatus;
 import org.joda.time.DateTime;
 import org.joda.time.Interval;
 

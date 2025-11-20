@@ -25,6 +25,7 @@ import com.fasterxml.jackson.dataformat.smile.SmileFactory;
 import com.google.common.util.concurrent.FutureCallback;
 import com.google.common.util.concurrent.Futures;
 import com.google.common.util.concurrent.ListenableFuture;
+import io.netty.handler.codec.http.HttpMethod;
 import org.apache.druid.client.JsonParserIterator;
 import org.apache.druid.java.util.common.concurrent.Execs;
 import org.apache.druid.java.util.common.guava.BaseSequence;
@@ -42,7 +43,6 @@ import org.apache.druid.rpc.ServiceClientFactory;
 import org.apache.druid.rpc.ServiceLocation;
 import org.apache.druid.rpc.StandardRetryPolicy;
 import org.apache.druid.utils.CloseableUtils;
-import org.jboss.netty.handler.codec.http.HttpMethod;
 
 import java.io.InputStream;
 import java.util.concurrent.ExecutionException;
@@ -159,11 +159,11 @@ public class DataServerClient
             log.error("Error cancelling query[%s]", query);
           }
           StatusResponseHolder response = cancelFuture.get();
-          if (response.getStatus().getCode() >= 500) {
+          if (response.getStatus().code() >= 500) {
             log.error("Error cancelling query[%s]: queryable node returned status[%d] [%s].",
                       query,
-                      response.getStatus().getCode(),
-                      response.getStatus().getReasonPhrase());
+                      response.getStatus().code(),
+                      response.getStatus().reasonPhrase());
           }
         }
         catch (ExecutionException | InterruptedException e) {

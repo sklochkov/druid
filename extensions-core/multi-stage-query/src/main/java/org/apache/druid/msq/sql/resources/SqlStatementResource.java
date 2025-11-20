@@ -91,7 +91,7 @@ import org.apache.druid.sql.http.SqlQuery;
 import org.apache.druid.sql.http.SqlResource;
 import org.apache.druid.storage.NilStorageConnector;
 import org.apache.druid.storage.StorageConnector;
-import org.jboss.netty.handler.codec.http.HttpResponseStatus;
+import io.netty.handler.codec.http.HttpResponseStatus;
 
 import javax.servlet.http.HttpServletRequest;
 import javax.ws.rs.Consumes;

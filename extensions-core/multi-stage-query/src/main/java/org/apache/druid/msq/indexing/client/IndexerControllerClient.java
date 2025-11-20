@@ -34,7 +34,7 @@ import org.apache.druid.msq.statistics.PartialKeyStatisticsInformation;
 import org.apache.druid.rpc.IgnoreHttpResponseHandler;
 import org.apache.druid.rpc.RequestBuilder;
 import org.apache.druid.rpc.ServiceClient;
-import org.jboss.netty.handler.codec.http.HttpMethod;
+import io.netty.handler.codec.http.HttpMethod;
 
 import javax.annotation.Nullable;
 import java.io.Closeable;

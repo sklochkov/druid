@@ -35,9 +35,9 @@ import org.apache.druid.java.util.common.ISE;
 import org.apache.druid.java.util.common.StringUtils;
 import org.apache.druid.java.util.http.client.Request;
 import org.apache.druid.java.util.http.client.response.StringFullResponseHolder;
-import org.jboss.netty.handler.codec.http.HttpHeaders;
-import org.jboss.netty.handler.codec.http.HttpMethod;
-import org.jboss.netty.handler.codec.http.HttpResponseStatus;
+import io.netty.handler.codec.http.HttpHeaders;
+import io.netty.handler.codec.http.HttpMethod;
+import io.netty.handler.codec.http.HttpResponseStatus;
 
 import javax.inject.Inject;
 import javax.ws.rs.core.MediaType;
@@ -120,7 +120,7 @@ public class CatalogClient implements CatalogSource
     final Request request;
     try {
       request = coordClient.makeRequest(HttpMethod.GET, url)
-          .addHeader(HttpHeaders.Names.ACCEPT, MediaType.APPLICATION_JSON);
+          .addHeader("Accept", MediaType.APPLICATION_JSON);
     }
     catch (IOException e) {
       throw new ISE("Cannot create catalog sync request");
@@ -137,11 +137,11 @@ public class CatalogClient implements CatalogSource
       // is during shutdown.
       return null;
     }
-    if (responseHolder.getStatus().getCode() == HttpResponseStatus.NOT_FOUND.getCode()) {
+    if (responseHolder.getStatus().code() == HttpResponseStatus.NOT_FOUND.code()) {
       // Not found means the item disappeared. Returning null means "not found".
       return null;
     }
-    if (responseHolder.getStatus().getCode() != HttpResponseStatus.OK.getCode()) {
+    if (responseHolder.getStatus().code() != HttpResponseStatus.OK.code()) {
       throw new ISE("Unexpected status from catalog sync: " + responseHolder.getStatus());
     }
     try {

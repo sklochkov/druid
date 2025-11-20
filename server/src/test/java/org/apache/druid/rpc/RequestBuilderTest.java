@@ -19,22 +19,23 @@
 
 package org.apache.druid.rpc;
 
+import java.net.URI;
+
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Iterables;
 import com.google.common.io.ByteStreams;
-import org.apache.druid.java.util.common.StringUtils;
-import org.apache.druid.java.util.http.client.Request;
-import org.apache.druid.segment.TestHelper;
+import io.netty.buffer.ChannelBufferInputStream;
+import io.netty.handler.codec.http.HttpMethod;
 import org.hamcrest.CoreMatchers;
 import org.hamcrest.MatcherAssert;
-import org.jboss.netty.buffer.ChannelBufferInputStream;
-import org.jboss.netty.handler.codec.http.HttpMethod;
 import org.joda.time.Duration;
 import org.junit.Assert;
 import org.junit.Test;
 import org.junit.internal.matchers.ThrowableMessageMatcher;
 
-import java.net.URI;
+import org.apache.druid.java.util.common.StringUtils;
+import org.apache.druid.java.util.http.client.Request;
+import org.apache.druid.segment.TestHelper;
 
 public class RequestBuilderTest
 {

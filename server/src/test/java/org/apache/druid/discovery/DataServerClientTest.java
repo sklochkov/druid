@@ -19,12 +19,25 @@
 
 package org.apache.druid.discovery;
 
+import java.util.Collections;
+import java.util.List;
+import javax.ws.rs.core.HttpHeaders;
+import javax.ws.rs.core.MediaType;
+
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
+import io.netty.handler.codec.http.HttpMethod;
+import io.netty.handler.codec.http.HttpResponseStatus;
+import org.junit.Assert;
+import org.junit.Before;
+import org.junit.Test;
+import static org.apache.druid.query.Druids.newScanQueryBuilder;
+import static org.mockito.Mockito.mock;
+
 import org.apache.druid.java.util.common.Intervals;
 import org.apache.druid.java.util.common.concurrent.Execs;
 import org.apache.druid.java.util.common.guava.Sequence;
@@ -41,19 +54,6 @@ import org.apache.druid.rpc.RequestBuilder;
 import org.apache.druid.rpc.ServiceClientFactory;
 import org.apache.druid.rpc.ServiceLocation;
 import org.apache.druid.server.QueryResource;
-import org.jboss.netty.handler.codec.http.HttpMethod;
-import org.jboss.netty.handler.codec.http.HttpResponseStatus;
-import org.junit.Assert;
-import org.junit.Before;
-import org.junit.Test;
-
-import javax.ws.rs.core.HttpHeaders;
-import javax.ws.rs.core.MediaType;
-import java.util.Collections;
-import java.util.List;
-
-import static org.apache.druid.query.Druids.newScanQueryBuilder;
-import static org.mockito.Mockito.mock;
 
 public class DataServerClientTest
 {

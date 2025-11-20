@@ -22,9 +22,9 @@ package org.apache.druid.security.kerberos;
 import org.apache.druid.java.util.common.logger.Logger;
 import org.apache.druid.java.util.http.client.response.ClientResponse;
 import org.apache.druid.java.util.http.client.response.HttpResponseHandler;
-import org.jboss.netty.handler.codec.http.HttpChunk;
-import org.jboss.netty.handler.codec.http.HttpResponse;
-import org.jboss.netty.handler.codec.http.HttpResponseStatus;
+import io.netty.handler.codec.http.HttpContent;
+import io.netty.handler.codec.http.HttpResponse;
+import io.netty.handler.codec.http.HttpResponseStatus;
 
 public class RetryIfUnauthorizedResponseHandler<Intermediate, Final>
     implements HttpResponseHandler<RetryResponseHolder<Intermediate>, RetryResponseHolder<Final>>
@@ -59,7 +59,7 @@ public class RetryIfUnauthorizedResponseHandler<Intermediate, Final>
   @SuppressWarnings("ReturnValueIgnored")
   public ClientResponse<RetryResponseHolder<Intermediate>> handleChunk(
       ClientResponse<RetryResponseHolder<Intermediate>> clientResponse,
-      HttpChunk httpChunk,
+      HttpContent httpChunk,
       long chunkNum
   )
   {

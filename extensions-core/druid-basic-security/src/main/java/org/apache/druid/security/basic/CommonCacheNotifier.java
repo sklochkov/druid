@@ -36,9 +36,9 @@ import org.apache.druid.java.util.http.client.response.ClientResponse;
 import org.apache.druid.java.util.http.client.response.HttpResponseHandler;
 import org.apache.druid.java.util.http.client.response.StatusResponseHolder;
 import org.apache.druid.server.DruidNode;
-import org.jboss.netty.handler.codec.http.HttpChunk;
-import org.jboss.netty.handler.codec.http.HttpMethod;
-import org.jboss.netty.handler.codec.http.HttpResponse;
+import io.netty.handler.codec.http.HttpContent;
+import io.netty.handler.codec.http.HttpMethod;
+import io.netty.handler.codec.http.HttpResponse;
 import org.joda.time.Duration;
 
 import javax.ws.rs.core.MediaType;
@@ -228,7 +228,7 @@ public class CommonCacheNotifier
     @Override
     public ClientResponse<StatusResponseHolder> handleChunk(
         ClientResponse<StatusResponseHolder> response,
-        HttpChunk chunk,
+        HttpContent chunk,
         long chunkNum
     )
     {

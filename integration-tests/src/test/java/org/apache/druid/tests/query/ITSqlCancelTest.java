@@ -34,7 +34,7 @@ import org.apache.druid.testing.guice.DruidTestModuleFactory;
 import org.apache.druid.testing.utils.DataLoaderHelper;
 import org.apache.druid.testing.utils.SqlTestQueryHelper;
 import org.apache.druid.tests.TestNGGroup;
-import org.jboss.netty.handler.codec.http.HttpResponseStatus;
+import io.netty.handler.codec.http.HttpResponseStatus;
 import org.testng.annotations.BeforeMethod;
 import org.testng.annotations.Guice;
 import org.testng.annotations.Test;

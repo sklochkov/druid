@@ -19,11 +19,24 @@
 
 package org.apache.druid.discovery;
 
+import java.nio.charset.StandardCharsets;
+import javax.ws.rs.POST;
+import javax.ws.rs.Path;
+import javax.ws.rs.Produces;
+import javax.ws.rs.core.MediaType;
+import javax.ws.rs.core.Response;
+
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.inject.Injector;
 import com.google.inject.Key;
 import com.google.inject.name.Names;
+import io.netty.handler.codec.http.HttpMethod;
+import org.easymock.EasyMock;
+import org.eclipse.jetty.server.Server;
+import org.junit.Assert;
+import org.junit.Test;
+
 import org.apache.druid.guice.GuiceInjectors;
 import org.apache.druid.guice.Jerseys;
 import org.apache.druid.guice.JsonConfigProvider;
@@ -36,18 +49,6 @@ import org.apache.druid.java.util.http.client.Request;
 import org.apache.druid.server.DruidNode;
 import org.apache.druid.server.initialization.BaseJettyTest;
 import org.apache.druid.server.initialization.jetty.JettyServerInitializer;
-import org.easymock.EasyMock;
-import org.eclipse.jetty.server.Server;
-import org.jboss.netty.handler.codec.http.HttpMethod;
-import org.junit.Assert;
-import org.junit.Test;
-
-import javax.ws.rs.POST;
-import javax.ws.rs.Path;
-import javax.ws.rs.Produces;
-import javax.ws.rs.core.MediaType;
-import javax.ws.rs.core.Response;
-import java.nio.charset.StandardCharsets;
 
 public class BrokerClientTest extends BaseJettyTest
 {

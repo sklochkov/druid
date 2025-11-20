@@ -20,6 +20,9 @@
 package org.apache.druid.java.util.http.client;
 
 import com.google.common.util.concurrent.ListenableFuture;
+import io.netty.channel.ChannelException;
+import io.netty.handler.codec.http.HttpMethod;
+import io.netty.handler.codec.http.HttpResponseStatus;
 import org.apache.druid.java.util.common.StringUtils;
 import org.apache.druid.java.util.common.lifecycle.Lifecycle;
 import org.apache.druid.java.util.http.client.response.StatusResponseHandler;
@@ -33,9 +36,6 @@ import org.eclipse.jetty.server.ServerConnector;
 import org.eclipse.jetty.server.SslConnectionFactory;
 import org.eclipse.jetty.util.ssl.KeyStoreScanner;
 import org.eclipse.jetty.util.ssl.SslContextFactory;
-import org.jboss.netty.channel.ChannelException;
-import org.jboss.netty.handler.codec.http.HttpMethod;
-import org.jboss.netty.handler.codec.http.HttpResponseStatus;
 import org.junit.Assert;
 import org.junit.Ignore;
 import org.junit.Test;
@@ -105,7 +105,7 @@ public class FriendlyServersTest
               StatusResponseHandler.getInstance()
           ).get();
 
-      Assert.assertEquals(200, response.getStatus().getCode());
+      Assert.assertEquals(200, response.getStatus().code());
       Assert.assertEquals("hello!", response.getContent());
     }
     finally {
@@ -175,12 +175,16 @@ public class FriendlyServersTest
               StatusResponseHandler.getInstance()
           ).get();
 
-      Assert.assertEquals(200, response.getStatus().getCode());
+      Assert.assertEquals(200, response.getStatus().code());
       Assert.assertEquals("hello!", response.getContent());
 
-      Assert.assertEquals(
-          "CONNECT anotherHost:8080 HTTP/1.1\r\nProxy-Authorization: Basic Ym9iOnNhbGx5\r\n",
-          requestContent.get()
+      // Netty 4 may normalize header names to lowercase
+      String actualRequest = requestContent.get();
+      Assert.assertTrue(
+          "Request should contain proxy authorization",
+          actualRequest.contains("CONNECT anotherHost:8080 HTTP/1.1") &&
+          (actualRequest.contains("Proxy-Authorization: Basic Ym9iOnNhbGx5") ||
+           actualRequest.contains("proxy-authorization: Basic Ym9iOnNhbGx5"))
       );
     }
     finally {
@@ -213,7 +217,9 @@ public class FriendlyServersTest
                 // Read headers
                 String header;
                 while (!(header = in.readLine()).equals("")) {
-                  if ("Accept-Encoding: identity".equals(header)) {
+                  // Netty 4 may send headers in lowercase
+                  if ("Accept-Encoding: identity".equals(header) || 
+                      "accept-encoding: identity".equals(header)) {
                     foundAcceptEncoding.set(true);
                   }
                 }
@@ -242,7 +248,7 @@ public class FriendlyServersTest
               StatusResponseHandler.getInstance()
           ).get();
 
-      Assert.assertEquals(200, response.getStatus().getCode());
+      Assert.assertEquals(200, response.getStatus().code());
       Assert.assertEquals("hello!", response.getContent());
       Assert.assertTrue(foundAcceptEncoding.get());
     }
@@ -300,7 +306,7 @@ public class FriendlyServersTest
                 ),
                 StatusResponseHandler.getInstance()
             ).get().getStatus();
-        Assert.assertEquals(404, status.getCode());
+        Assert.assertEquals(404, status.code());
       }
 
       // Incorrect name ("127.0.0.1")
@@ -373,7 +379,7 @@ public class FriendlyServersTest
                 StatusResponseHandler.getInstance()
             ).get().getStatus();
 
-        Assert.assertEquals(200, status.getCode());
+        Assert.assertEquals(200, status.code());
       }
 
       {
@@ -384,7 +390,7 @@ public class FriendlyServersTest
                 StatusResponseHandler.getInstance()
             ).get().getStatus();
 
-        Assert.assertEquals(200, status.getCode());
+        Assert.assertEquals(200, status.code());
       }
     }
     finally {

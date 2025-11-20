@@ -42,7 +42,7 @@ import org.apache.druid.sql.http.SqlQuery;
 import org.apache.druid.testing.IntegrationTestingConfig;
 import org.apache.druid.testing.clients.OverlordResourceTestClient;
 import org.apache.druid.testing.clients.SqlResourceTestClient;
-import org.jboss.netty.handler.codec.http.HttpResponseStatus;
+import io.netty.handler.codec.http.HttpResponseStatus;
 import org.testng.Assert;
 
 import java.util.ArrayList;

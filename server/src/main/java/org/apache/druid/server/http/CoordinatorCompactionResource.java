@@ -147,7 +147,7 @@ public class CoordinatorCompactionResource
     catch (Exception e) {
       if (e.getCause() instanceof HttpResponseException) {
         final HttpResponseException cause = (HttpResponseException) e.getCause();
-        return Response.status(cause.getResponse().getStatus().getCode())
+        return Response.status(cause.getResponse().getStatus().code())
                        .entity(cause.getResponse().getContent())
                        .build();
       } else {

@@ -36,10 +36,10 @@ import org.apache.druid.java.util.http.client.response.StatusResponseHolder;
 import org.apache.druid.testing.guice.TestClient;
 import org.apache.druid.testing.utils.ITRetryUtil;
 import org.apache.druid.utils.Throwables;
-import org.jboss.netty.channel.ChannelException;
-import org.jboss.netty.handler.codec.http.HttpHeaders;
-import org.jboss.netty.handler.codec.http.HttpMethod;
-import org.jboss.netty.handler.codec.http.HttpResponseStatus;
+import io.netty.channel.ChannelException;
+import io.netty.handler.codec.http.HttpHeaders;
+import io.netty.handler.codec.http.HttpMethod;
+import io.netty.handler.codec.http.HttpResponseStatus;
 
 import javax.annotation.Nullable;
 import javax.ws.rs.core.MediaType;

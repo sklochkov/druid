@@ -36,9 +36,9 @@ import org.apache.druid.testsEx.config.ClusterConfig;
 import org.apache.druid.testsEx.config.ResolvedConfig;
 import org.apache.druid.testsEx.config.ResolvedDruidService;
 import org.apache.druid.testsEx.config.ResolvedService.ResolvedInstance;
-import org.jboss.netty.handler.codec.http.HttpHeaders;
-import org.jboss.netty.handler.codec.http.HttpMethod;
-import org.jboss.netty.handler.codec.http.HttpResponseStatus;
+import io.netty.handler.codec.http.HttpHeaders;
+import io.netty.handler.codec.http.HttpMethod;
+import io.netty.handler.codec.http.HttpResponseStatus;
 
 import javax.inject.Inject;
 import javax.ws.rs.core.MediaType;

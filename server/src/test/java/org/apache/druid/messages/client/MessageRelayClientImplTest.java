@@ -19,26 +19,27 @@
 
 package org.apache.druid.messages.client;
 
+import java.util.Collections;
+import javax.ws.rs.core.HttpHeaders;
+
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.dataformat.smile.SmileFactory;
 import com.fasterxml.jackson.jaxrs.smile.SmileMediaTypes;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.util.concurrent.ListenableFuture;
+import io.netty.handler.codec.http.HttpMethod;
+import io.netty.handler.codec.http.HttpResponseStatus;
 import it.unimi.dsi.fastutil.bytes.ByteArrays;
-import org.apache.druid.jackson.DefaultObjectMapper;
-import org.apache.druid.messages.MessageBatch;
-import org.apache.druid.rpc.MockServiceClient;
-import org.apache.druid.rpc.RequestBuilder;
-import org.jboss.netty.handler.codec.http.HttpMethod;
-import org.jboss.netty.handler.codec.http.HttpResponseStatus;
 import org.junit.After;
 import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
 
-import javax.ws.rs.core.HttpHeaders;
-import java.util.Collections;
+import org.apache.druid.jackson.DefaultObjectMapper;
+import org.apache.druid.messages.MessageBatch;
+import org.apache.druid.rpc.MockServiceClient;
+import org.apache.druid.rpc.RequestBuilder;
 
 public class MessageRelayClientImplTest
 {

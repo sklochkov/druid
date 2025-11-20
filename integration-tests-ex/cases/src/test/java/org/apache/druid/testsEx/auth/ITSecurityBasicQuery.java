@@ -40,7 +40,7 @@ import org.apache.druid.testing.utils.MsqTestQueryHelper;
 import org.apache.druid.tests.indexer.AbstractIndexerTest;
 import org.apache.druid.testsEx.categories.Security;
 import org.apache.druid.testsEx.config.DruidTestRunner;
-import org.jboss.netty.handler.codec.http.HttpResponseStatus;
+import io.netty.handler.codec.http.HttpResponseStatus;
 import org.junit.After;
 import org.junit.Assert;
 import org.junit.Before;

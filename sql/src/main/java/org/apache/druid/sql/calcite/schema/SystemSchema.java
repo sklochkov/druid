@@ -77,6 +77,7 @@ import org.apache.druid.server.DruidNode;
 import org.apache.druid.server.security.Access;
 import org.apache.druid.server.security.Action;
 import org.apache.druid.server.security.AuthenticationResult;
+import io.netty.handler.codec.http.HttpMethod;
 import org.apache.druid.server.security.AuthorizationUtils;
 import org.apache.druid.server.security.AuthorizerMapper;
 import org.apache.druid.server.security.ForbiddenException;
@@ -87,7 +88,6 @@ import org.apache.druid.sql.calcite.table.RowSignatures;
 import org.apache.druid.timeline.DataSegment;
 import org.apache.druid.timeline.SegmentId;
 import org.apache.druid.timeline.SegmentStatusInCluster;
-import org.jboss.netty.handler.codec.http.HttpMethod;
 
 import javax.annotation.Nullable;
 import javax.servlet.http.HttpServletResponse;
@@ -1061,12 +1061,12 @@ public class SystemSchema extends AbstractSchema
           new InputStreamFullResponseHandler()
       );
 
-      if (responseHolder.getStatus().getCode() != HttpServletResponse.SC_OK) {
+      if (responseHolder.getStatus().code() != HttpServletResponse.SC_OK) {
         throw new RE(
             "Failed to talk to leader node at [%s]. Error code [%d], description [%s].",
             query,
-            responseHolder.getStatus().getCode(),
-            responseHolder.getStatus().getReasonPhrase()
+            responseHolder.getStatus().code(),
+            responseHolder.getStatus().reasonPhrase()
         );
       }
     }

@@ -20,6 +20,9 @@
 package org.apache.druid.discovery;
 
 import com.google.inject.Inject;
+import io.netty.channel.ChannelException;
+import io.netty.handler.codec.http.HttpMethod;
+import io.netty.handler.codec.http.HttpResponseStatus;
 import org.apache.druid.error.DruidException;
 import org.apache.druid.guice.annotations.EscalatedGlobal;
 import org.apache.druid.java.util.common.IOE;
@@ -29,9 +32,6 @@ import org.apache.druid.java.util.http.client.HttpClient;
 import org.apache.druid.java.util.http.client.Request;
 import org.apache.druid.java.util.http.client.response.StringFullResponseHandler;
 import org.apache.druid.java.util.http.client.response.StringFullResponseHolder;
-import org.jboss.netty.channel.ChannelException;
-import org.jboss.netty.handler.codec.http.HttpMethod;
-import org.jboss.netty.handler.codec.http.HttpResponseStatus;
 
 import java.io.IOException;
 import java.net.MalformedURLException;
@@ -81,7 +81,7 @@ public class BrokerClient
           Request newRequestUrl = getNewRequestUrl(request);
           final StringFullResponseHolder fullResponseHolder = brokerHttpClient.go(newRequestUrl, new StringFullResponseHandler(StandardCharsets.UTF_8)).get();
 
-          HttpResponseStatus responseStatus = fullResponseHolder.getResponse().getStatus();
+          HttpResponseStatus responseStatus = fullResponseHolder.getResponse().status();
           if (HttpResponseStatus.SERVICE_UNAVAILABLE.equals(responseStatus)
               || HttpResponseStatus.GATEWAY_TIMEOUT.equals(responseStatus)) {
             throw DruidException.forPersona(DruidException.Persona.OPERATOR)

@@ -36,7 +36,7 @@ import org.apache.druid.testing.utils.DataLoaderHelper;
 import org.apache.druid.testing.utils.MsqTestQueryHelper;
 import org.apache.druid.testsEx.cluster.CatalogClient;
 import org.apache.druid.testsEx.cluster.DruidClusterClient;
-import org.jboss.netty.handler.codec.http.HttpResponseStatus;
+import io.netty.handler.codec.http.HttpResponseStatus;
 import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;

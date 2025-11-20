@@ -26,9 +26,9 @@ import org.apache.druid.java.util.http.client.response.ClientResponse;
 import org.apache.druid.java.util.http.client.response.HttpResponseHandler;
 import org.apache.druid.msq.statistics.ClusterByStatisticsSnapshot;
 import org.apache.druid.msq.statistics.serde.ClusterByStatisticsSnapshotSerde;
-import org.jboss.netty.buffer.ChannelBuffer;
-import org.jboss.netty.handler.codec.http.HttpChunk;
-import org.jboss.netty.handler.codec.http.HttpResponse;
+import io.netty.buffer.ByteBuf;
+import io.netty.handler.codec.http.HttpContent;
+import io.netty.handler.codec.http.HttpResponse;
 
 import javax.ws.rs.core.HttpHeaders;
 import javax.ws.rs.core.MediaType;
@@ -58,7 +58,10 @@ public class SketchResponseHandler implements HttpResponseHandler<BytesFullRespo
       {
       });
     }
-    holder.addChunk(getContentBytes(response.getContent()));
+    // In Netty 4, only HttpContent has content(), check if response is also HttpContent
+    if (response instanceof HttpContent) {
+      holder.addChunk(getContentBytes(((HttpContent) response).content()));
+    }
 
     return ClientResponse.unfinished(holder);
   }
@@ -66,7 +69,7 @@ public class SketchResponseHandler implements HttpResponseHandler<BytesFullRespo
   @Override
   public ClientResponse<BytesFullResponseHolder> handleChunk(
       ClientResponse<BytesFullResponseHolder> response,
-      HttpChunk chunk,
+      HttpContent chunk,
       long chunkNum
   )
   {
@@ -76,7 +79,7 @@ public class SketchResponseHandler implements HttpResponseHandler<BytesFullRespo
       return ClientResponse.finished(null);
     }
 
-    holder.addChunk(getContentBytes(chunk.getContent()));
+    holder.addChunk(getContentBytes(chunk.content()));
     return response;
   }
 
@@ -91,7 +94,7 @@ public class SketchResponseHandler implements HttpResponseHandler<BytesFullRespo
   {
   }
 
-  private byte[] getContentBytes(ChannelBuffer content)
+  private byte[] getContentBytes(ByteBuf content)
   {
     byte[] contentBytes = new byte[content.readableBytes()];
     content.readBytes(contentBytes);

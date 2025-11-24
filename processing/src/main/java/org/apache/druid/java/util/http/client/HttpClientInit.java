@@ -64,13 +64,19 @@ public class HttpClientInit
           TimeUnit.MILLISECONDS,
           512
       );
+
+      // Start timer immediately - don't wait for lifecycle.start()
+      // This ensures timeouts work even if lifecycle isn't started
+      // Critical for preventing hung connections in production
+      timer.start();
+
       lifecycle.addMaybeStartHandler(
           new Lifecycle.Handler()
           {
             @Override
             public void start()
             {
-              timer.start();
+              // Timer already started in constructor
             }
 
             @Override
@@ -112,21 +118,25 @@ public class HttpClientInit
             public void stop()
             {
               // Shutdown the EventLoopGroup
-              // CRITICAL: Must wait for COMPLETE termination to prevent memory leaks
-              // Netty 3's releaseExternalResources() blocked until all threads stopped
+              // Trade-off: We cannot wait indefinitely as it causes production hangs
+              // Accept potential thread leaks to prevent operational issues
               try {
                 // Initiate immediate shutdown
                 workerGroup.shutdownGracefully(0, 0, TimeUnit.MILLISECONDS);
 
-                // Wait for full termination with timeout as safety
-                // This blocks but is necessary to prevent memory leaks
-                boolean terminated = workerGroup.terminationFuture().await(10, TimeUnit.SECONDS);
+                // Wait briefly for termination, but don't block indefinitely
+                // If channels are hung, waiting forever causes compaction stalls
+                boolean terminated = workerGroup.terminationFuture().await(5, TimeUnit.SECONDS);
+
                 if (!terminated) {
-                  log.error(
-                      "EventLoopGroup did not terminate within 10 seconds! " +
-                      "This indicates unclosed channels or a deadlock. " +
-                      "Proceeding anyway but memory may leak."
+                  log.warn(
+                      "EventLoopGroup did not terminate within 5 seconds. " +
+                      "Continuing shutdown - daemon threads will be cleaned up by JVM. " +
+                      "If this happens frequently, check for hung HTTP connections."
                   );
+                  // Continue - don't block
+                  // Threads are daemon so won't prevent JVM exit
+                  // May accumulate in long-running processes - monitor thread count
                 }
               }
               catch (InterruptedException e) {

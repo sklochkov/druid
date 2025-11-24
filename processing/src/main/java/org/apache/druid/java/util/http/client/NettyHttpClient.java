@@ -101,16 +101,9 @@ public class NettyHttpClient extends AbstractHttpClient
   @LifecycleStop
   public void stop()
   {
+    // Mark as closed but let in-flight requests complete
+    // Don't wait - this allows shutdown to proceed without interrupting active requests
     pool.close();
-
-    // Give pool time to close all channels before EventLoopGroup shutdown
-    // This is critical to prevent hung connections from blocking shutdown
-    try {
-      Thread.sleep(1000);
-    } catch (InterruptedException e) {
-      Thread.currentThread().interrupt();
-      log.warn("Interrupted while waiting for pool to close channels");
-    }
   }
 
   @Override

@@ -118,31 +118,24 @@ public class HttpClientInit
             public void stop()
             {
               // Shutdown the EventLoopGroup
-              // Trade-off: We cannot wait indefinitely as it causes production hangs
-              // Accept potential thread leaks to prevent operational issues
-              try {
-                // Initiate immediate shutdown
-                workerGroup.shutdownGracefully(0, 0, TimeUnit.MILLISECONDS);
+              // IMPORTANT: Do NOT wait for termination - it can interrupt in-flight requests
+              // This is a deliberate trade-off for production stability
 
-                // Wait briefly for termination, but don't block indefinitely
-                // If channels are hung, waiting forever causes compaction stalls
-                boolean terminated = workerGroup.terminationFuture().await(5, TimeUnit.SECONDS);
+              // Initiate graceful shutdown - EventLoop will terminate when idle
+              workerGroup.shutdownGracefully(0, 100, TimeUnit.MILLISECONDS);
 
-                if (!terminated) {
-                  log.warn(
-                      "EventLoopGroup did not terminate within 5 seconds. " +
-                      "Continuing shutdown - daemon threads will be cleaned up by JVM. " +
-                      "If this happens frequently, check for hung HTTP connections."
-                  );
-                  // Continue - don't block
-                  // Threads are daemon so won't prevent JVM exit
-                  // May accumulate in long-running processes - monitor thread count
-                }
-              }
-              catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
-                log.warn("Interrupted while waiting for EventLoopGroup termination");
-              }
+              // Do NOT wait - daemon threads will cleanup
+              // Waiting can cause:
+              // 1. Interruption of active HTTP requests (compactions, lookups)
+              // 2. Production hangs if channels are stuck
+              // 3. Cascade failures across components
+
+              // Thread accumulation is acceptable because:
+              // - Threads are daemon (won't prevent JVM exit)
+              // - Production services are long-lived (not constantly restarting)
+              // - Better to leak threads than interrupt critical operations
+
+              log.debug("EventLoopGroup shutdown initiated (async)");
             }
           }
       );

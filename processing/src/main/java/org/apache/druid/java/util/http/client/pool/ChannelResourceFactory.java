@@ -289,17 +289,10 @@ public class ChannelResourceFactory implements ResourceFactory<String, ChannelFu
   public void close(ChannelFuture resource)
   {
     log.trace("Closing");
-    // Close the channel and wait for FULL completion
-    // This is critical - if channels don't close, EventLoopGroup can't terminate
-    // In production, incomplete shutdown causes thread/resource accumulation
-    try {
-      if (!resource.channel().close().await(5, TimeUnit.SECONDS)) {
-        log.warn("Channel did not close within 5 seconds, forcing close");
-      }
-    } catch (InterruptedException e) {
-      Thread.currentThread().interrupt();
-      log.warn("Interrupted while closing channel");
-    }
+    // Close channel asynchronously - don't wait
+    // Waiting can block shutdown and interrupt other operations
+    // Netty will handle the close asynchronously
+    resource.channel().close();
   }
 
   /**

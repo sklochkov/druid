@@ -71,7 +71,15 @@ public class HttpClientConfig
   private static final int DEFAULT_BOSS_COUNT = 1;
 
   // Default from SelectorUtil.DEFAULT_IO_THREADS, which is private:
-  private static final int DEFAULT_WORKER_COUNT = JvmUtils.getRuntimeInfo().getAvailableProcessors() * 2;
+  // Netty 4 migration: Cap worker threads to prevent memory exhaustion
+  // On high-core systems (48+ cores), cores*2 can create 96+ threads per client
+  // This causes OOM in memory-constrained environments (indexing tasks, CI)
+  // Cap at reasonable maximum while still allowing parallelism
+  private static final int MAX_WORKER_THREADS = 16;
+  private static final int DEFAULT_WORKER_COUNT = Math.min(
+      JvmUtils.getRuntimeInfo().getAvailableProcessors() * 2,
+      MAX_WORKER_THREADS
+  );
 
   private static final Duration DEFAULT_UNUSED_CONNECTION_TIMEOUT_DURATION = new Period("PT4M").toStandardDuration();
 

@@ -59,9 +59,14 @@ public class SketchResponseHandler implements HttpResponseHandler<BytesFullRespo
       });
     }
     // In Netty 4, only HttpContent has content(), check if response is also HttpContent
+    // This handles FullHttpResponse which implements both HttpResponse and HttpContent
     if (response instanceof HttpContent) {
-      holder.addChunk(getContentBytes(((HttpContent) response).content()));
+      ByteBuf content = ((HttpContent) response).content();
+      if (content.readableBytes() > 0) {
+        holder.addChunk(getContentBytes(content));
+      }
     }
+    // Note: If response is not HttpContent, content will come in subsequent handleChunk() calls
 
     return ClientResponse.unfinished(holder);
   }

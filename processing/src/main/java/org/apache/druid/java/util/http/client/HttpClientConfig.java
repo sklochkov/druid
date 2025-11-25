@@ -72,10 +72,14 @@ public class HttpClientConfig
 
   // Default from SelectorUtil.DEFAULT_IO_THREADS, which is private:
   // Netty 4 migration: Cap worker threads to prevent memory exhaustion
-  // On high-core systems (48+ cores), cores*2 can create 96+ threads per client
-  // This causes OOM in memory-constrained environments (indexing tasks, CI)
-  // Cap at reasonable maximum while still allowing parallelism
-  private static final int MAX_WORKER_THREADS = 16;
+  //
+  // CRITICAL: Runtime.availableProcessors() may not respect cgroup limits in all Java versions
+  // even though the JVM detects the limit. We cap aggressively to prevent OOM in containers.
+  //
+  // On systems with cpu:2000m (2 CPUs), this prevents creating 192 threads (96*2)
+  // Cap at 8 for memory-constrained environments (indexing tasks, CI)
+  // This is sufficient for HTTP client parallelism
+  private static final int MAX_WORKER_THREADS = 8;
   private static final int DEFAULT_WORKER_COUNT = Math.min(
       JvmUtils.getRuntimeInfo().getAvailableProcessors() * 2,
       MAX_WORKER_THREADS

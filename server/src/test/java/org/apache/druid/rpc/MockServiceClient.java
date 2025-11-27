@@ -25,8 +25,8 @@ import java.util.Queue;
 
 import com.google.common.util.concurrent.Futures;
 import com.google.common.util.concurrent.ListenableFuture;
-import io.netty.buffer.ChannelBuffers;
-import io.netty.handler.codec.http.DefaultHttpResponse;
+import io.netty.buffer.Unpooled;
+import io.netty.handler.codec.http.DefaultFullHttpResponse;
 import io.netty.handler.codec.http.HttpResponse;
 import io.netty.handler.codec.http.HttpResponseStatus;
 import io.netty.handler.codec.http.HttpVersion;
@@ -87,12 +87,13 @@ public class MockServiceClient implements ServiceClient
       final byte[] content
   )
   {
-    final HttpResponse response = new DefaultHttpResponse(HttpVersion.HTTP_1_1, status);
+    final HttpResponse response = new DefaultFullHttpResponse(
+        HttpVersion.HTTP_1_1,
+        status,
+        content == null ? Unpooled.EMPTY_BUFFER : Unpooled.wrappedBuffer(content)
+    );
     for (Map.Entry<String, String> headerEntry : headers.entrySet()) {
       response.headers().set(headerEntry.getKey(), headerEntry.getValue());
-    }
-    if (content != null) {
-      response.setContent(ChannelBuffers.wrappedBuffer(content));
     }
     return expectAndRespond(request, response);
   }

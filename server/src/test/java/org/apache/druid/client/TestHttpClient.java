@@ -30,8 +30,8 @@ import javax.annotation.Nullable;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.common.util.concurrent.Futures;
 import com.google.common.util.concurrent.ListenableFuture;
-import io.netty.buffer.HeapChannelBufferFactory;
-import io.netty.handler.codec.http.DefaultHttpResponse;
+import io.netty.buffer.Unpooled;
+import io.netty.handler.codec.http.DefaultFullHttpResponse;
 import io.netty.handler.codec.http.HttpResponse;
 import io.netty.handler.codec.http.HttpResponseStatus;
 import io.netty.handler.codec.http.HttpVersion;
@@ -132,11 +132,12 @@ public class TestHttpClient implements HttpClient
           objectMapper,
           RESPONSE_CTX_HEADER_LEN_LIMIT
       );
-      final HttpResponse response = new DefaultHttpResponse(HttpVersion.HTTP_1_1, HttpResponseStatus.OK);
-      response.headers().add(QueryResource.HEADER_RESPONSE_CONTEXT, serializationResult.getResult());
-      response.setContent(
-          HeapChannelBufferFactory.getInstance().getBuffer(serializedContent, 0, serializedContent.length)
+      final HttpResponse response = new DefaultFullHttpResponse(
+          HttpVersion.HTTP_1_1,
+          HttpResponseStatus.OK,
+          Unpooled.wrappedBuffer(serializedContent)
       );
+      response.headers().add(QueryResource.HEADER_RESPONSE_CONTEXT, serializationResult.getResult());
       final ClientResponse<Intermediate> intermClientResponse = handler.handleResponse(response, NOOP_TRAFFIC_COP);
       final ClientResponse<Final> finalClientResponse = handler.done(intermClientResponse);
       return Futures.immediateFuture(finalClientResponse.getObj());

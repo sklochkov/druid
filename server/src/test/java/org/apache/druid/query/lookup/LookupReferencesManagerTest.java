@@ -31,10 +31,12 @@ import java.util.concurrent.TimeoutException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
-import io.netty.buffer.BigEndianHeapChannelBuffer;
+import io.netty.buffer.Unpooled;
+import io.netty.handler.codec.http.DefaultFullHttpResponse;
 import io.netty.handler.codec.http.HttpMethod;
 import io.netty.handler.codec.http.HttpResponse;
 import io.netty.handler.codec.http.HttpResponseStatus;
+import io.netty.handler.codec.http.HttpVersion;
 import org.easymock.EasyMock;
 import org.junit.Assert;
 import org.junit.Before;
@@ -93,11 +95,7 @@ public class LookupReferencesManagerTest
 
   private static HttpResponse newEmptyResponse(final HttpResponseStatus status)
   {
-    final HttpResponse response = EasyMock.createNiceMock(HttpResponse.class);
-    EasyMock.expect(response.getStatus()).andReturn(status).anyTimes();
-    EasyMock.expect(response.getContent()).andReturn(new BigEndianHeapChannelBuffer(0));
-    EasyMock.replay(response);
-    return response;
+    return new DefaultFullHttpResponse(HttpVersion.HTTP_1_1, status, Unpooled.EMPTY_BUFFER);
   }
 
   @Test

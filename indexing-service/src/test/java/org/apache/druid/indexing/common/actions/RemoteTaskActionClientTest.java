@@ -34,7 +34,8 @@ import org.apache.druid.rpc.HttpResponseException;
 import org.apache.druid.rpc.RequestBuilder;
 import org.apache.druid.rpc.ServiceClient;
 import org.easymock.EasyMock;
-import io.netty.buffer.BigEndianHeapChannelBuffer;
+import io.netty.buffer.Unpooled;
+import io.netty.handler.codec.http.DefaultFullHttpResponse;
 import io.netty.handler.codec.http.DefaultHttpResponse;
 import io.netty.handler.codec.http.HttpMethod;
 import io.netty.handler.codec.http.HttpResponse;
@@ -113,10 +114,11 @@ public class RemoteTaskActionClientTest
   public void testSubmitWithIllegalStatusCode() throws Exception
   {
     // return status code 400
-    final HttpResponse response = EasyMock.createNiceMock(HttpResponse.class);
-    EasyMock.expect(response.getStatus()).andReturn(HttpResponseStatus.BAD_REQUEST).anyTimes();
-    EasyMock.expect(response.getContent()).andReturn(new BigEndianHeapChannelBuffer(0));
-    EasyMock.replay(response);
+    final HttpResponse response = new DefaultFullHttpResponse(
+        HttpVersion.HTTP_1_1,
+        HttpResponseStatus.BAD_REQUEST,
+        Unpooled.EMPTY_BUFFER
+    );
 
     StringFullResponseHolder responseHolder = new StringFullResponseHolder(
         response,
@@ -146,6 +148,6 @@ public class RemoteTaskActionClientTest
     );
     client.submit(action);
 
-    EasyMock.verify(directOverlordClient, response);
+    EasyMock.verify(directOverlordClient);
   }
 }

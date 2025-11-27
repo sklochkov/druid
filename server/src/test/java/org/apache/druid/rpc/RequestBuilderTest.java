@@ -24,7 +24,7 @@ import java.net.URI;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Iterables;
 import com.google.common.io.ByteStreams;
-import io.netty.buffer.ChannelBufferInputStream;
+import io.netty.buffer.ByteBufInputStream;
 import io.netty.handler.codec.http.HttpMethod;
 import org.hamcrest.CoreMatchers;
 import org.hamcrest.MatcherAssert;
@@ -132,7 +132,7 @@ public class RequestBuilderTest
     // Read and verify content.
     Assert.assertEquals(
         json,
-        StringUtils.fromUtf8(ByteStreams.toByteArray(new ChannelBufferInputStream(request.getContent())))
+        StringUtils.fromUtf8(ByteStreams.toByteArray(new ByteBufInputStream(request.getContent())))
     );
   }
 
@@ -154,7 +154,7 @@ public class RequestBuilderTest
     // Read and verify content.
     Assert.assertEquals(
         "{\"foo\":3}",
-        StringUtils.fromUtf8(ByteStreams.toByteArray(new ChannelBufferInputStream(request.getContent())))
+        StringUtils.fromUtf8(ByteStreams.toByteArray(new ByteBufInputStream(request.getContent())))
     );
   }
 

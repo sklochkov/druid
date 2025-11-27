@@ -32,8 +32,8 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.common.util.concurrent.ListenableFuture;
 import com.google.common.util.concurrent.ListeningScheduledExecutorService;
 import com.google.common.util.concurrent.MoreExecutors;
-import io.netty.buffer.ChannelBuffers;
-import io.netty.handler.codec.http.DefaultHttpResponse;
+import io.netty.buffer.Unpooled;
+import io.netty.handler.codec.http.DefaultFullHttpResponse;
 import io.netty.handler.codec.http.HttpResponse;
 import io.netty.handler.codec.http.HttpResponseStatus;
 import io.netty.handler.codec.http.HttpVersion;
@@ -100,8 +100,11 @@ public class TestSegmentLoadingHttpClient implements HttpClient
           .apply(request.getUrl().getHost());
       if (changeHandler == null) {
         final HttpResponse failureResponse =
-            new DefaultHttpResponse(HttpVersion.HTTP_1_1, HttpResponseStatus.NOT_FOUND);
-        failureResponse.setContent(ChannelBuffers.EMPTY_BUFFER);
+            new DefaultFullHttpResponse(
+                HttpVersion.HTTP_1_1,
+                HttpResponseStatus.NOT_FOUND,
+                Unpooled.EMPTY_BUFFER
+            );
         handler.handleResponse(failureResponse, NOOP_TRAFFIC_COP);
         return (Final) new ByteArrayInputStream(new byte[0]);
       }
@@ -115,8 +118,11 @@ public class TestSegmentLoadingHttpClient implements HttpClient
 
       // Set response content and status
       final HttpResponse response =
-          new DefaultHttpResponse(HttpVersion.HTTP_1_1, HttpResponseStatus.OK);
-      response.setContent(ChannelBuffers.EMPTY_BUFFER);
+          new DefaultFullHttpResponse(
+              HttpVersion.HTTP_1_1,
+              HttpResponseStatus.OK,
+              Unpooled.EMPTY_BUFFER
+          );
       handler.handleResponse(response, NOOP_TRAFFIC_COP);
       return (Final) new ByteArrayInputStream(serializedContent);
     }

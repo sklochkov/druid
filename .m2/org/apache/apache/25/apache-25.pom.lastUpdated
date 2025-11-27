@@ -1,0 +1,10 @@
+#NOTE: This is a Maven Resolver internal implementation file, its format can be changed without prior notice.
+#Thu Nov 27 17:42:06 GMT 2025
+${repoOrgUrl}/.error=Could not transfer artifact org.apache\:apache\:pom\:25 from/to ${repoOrgId} (${repoOrgUrl})\: Cannot access ${repoOrgUrl} with type default using the available connector factories\: BasicRepositoryConnectorFactory
+@default-${repoOrgId}-${repoOrgUrl}/.lastUpdated=1764265326424
+@default-central-https\://repo.maven.apache.org/maven2/.lastUpdated=1764265326698
+https\://repository.mulesoft.org/nexus/content/repositories/public/.error=Could not transfer artifact org.apache\:apache\:pom\:25 from/to sigar (https\://repository.mulesoft.org/nexus/content/repositories/public)\: Transfer failed for https\://repository.mulesoft.org/nexus/content/repositories/public/org/apache/apache/25/apache-25.pom
+@default-cflt-public-https\://packages.confluent.io/maven/.lastUpdated=1764265326695
+https\://repo.maven.apache.org/maven2/.error=Could not transfer artifact org.apache\:apache\:pom\:25 from/to central (https\://repo.maven.apache.org/maven2)\: Transfer failed for https\://repo.maven.apache.org/maven2/org/apache/apache/25/apache-25.pom
+@default-sigar-https\://repository.mulesoft.org/nexus/content/repositories/public/.lastUpdated=1764265326692
+https\://packages.confluent.io/maven/.error=Could not transfer artifact org.apache\:apache\:pom\:25 from/to cflt-public (https\://packages.confluent.io/maven/)\: Transfer failed for https\://packages.confluent.io/maven/org/apache/apache/25/apache-25.pom

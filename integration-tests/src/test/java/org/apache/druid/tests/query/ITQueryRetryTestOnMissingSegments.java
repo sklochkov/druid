@@ -151,7 +151,7 @@ public class ITQueryRetryTestOnMissingSegments
           .queryAsync(queryHelper.getQueryURL(config.getBrokerUrl()), queryWithResult.getQuery())
           .get();
 
-      if (responseHolder.getStatus().getCode() == HttpResponseStatus.OK.getCode()) {
+      if (responseHolder.getStatus().code() == HttpResponseStatus.OK.code()) {
         querySuccess++;
 
         List<Map<String, Object>> result = jsonMapper.readValue(
@@ -178,7 +178,7 @@ public class ITQueryRetryTestOnMissingSegments
         } else {
           resultMatches++;
         }
-      } else if (responseHolder.getStatus().getCode() == HttpResponseStatus.INTERNAL_SERVER_ERROR.getCode() &&
+      } else if (responseHolder.getStatus().code() == HttpResponseStatus.INTERNAL_SERVER_ERROR.code() &&
                  expectation == Expectation.QUERY_FAILURE) {
         final Map<String, Object> response = jsonMapper.readValue(responseHolder.getContent(), Map.class);
         final String errorMessage = (String) response.get("errorMessage");

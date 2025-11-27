@@ -335,8 +335,8 @@ public class OverlordClientImplTest
 
     MatcherAssert.assertThat(e.getCause(), CoreMatchers.instanceOf(HttpResponseException.class));
     Assert.assertEquals(
-        HttpResponseStatus.NOT_FOUND.getCode(),
-        ((HttpResponseException) e.getCause()).getResponse().getStatus().getCode()
+        HttpResponseStatus.NOT_FOUND.code(),
+        ((HttpResponseException) e.getCause()).getResponse().getStatus().code()
     );
   }
 

@@ -196,7 +196,7 @@ public class ITHighAvailabilityTest
           new Request(HttpMethod.GET, new URL(location)),
           StatusResponseHandler.getInstance()
       ).get();
-      LOG.info("%s responded with %s", location, response.getStatus().getCode());
+      LOG.info("%s responded with %s", location, response.getStatus().code());
       Assert.assertEquals(response.getStatus(), HttpResponseStatus.OK);
       count++;
     }

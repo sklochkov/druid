@@ -209,10 +209,10 @@ public class CoordinatorResourceTestClient
           responseHandler
       ).get();
 
-      if (response.getStatus().getCode() == HttpResponseStatus.NO_CONTENT.getCode()) {
+      if (response.getStatus().code() == HttpResponseStatus.NO_CONTENT.code()) {
         return null;
       }
-      if (response.getStatus().getCode() != HttpResponseStatus.OK.getCode()) {
+      if (response.getStatus().code() != HttpResponseStatus.OK.code()) {
         throw new ISE(
             "Error while making request to url [%s] status [%s] content [%s]",
             url,
@@ -353,10 +353,10 @@ public class CoordinatorResourceTestClient
           responseHandler
       ).get();
 
-      if (response.getStatus().getCode() == HttpResponseStatus.NOT_FOUND.getCode()) {
+      if (response.getStatus().code() == HttpResponseStatus.NOT_FOUND.code()) {
         return null;
       }
-      if (response.getStatus().getCode() != HttpResponseStatus.OK.getCode()) {
+      if (response.getStatus().code() != HttpResponseStatus.OK.code()) {
         throw new ISE(
             "Error while making request to url [%s] status [%s] content [%s]",
             url,

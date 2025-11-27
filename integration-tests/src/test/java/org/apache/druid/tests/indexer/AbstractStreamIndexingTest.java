@@ -303,7 +303,7 @@ public abstract class AbstractStreamIndexingTest extends AbstractIndexerTest
               )
           )
       );
-      Assert.assertEquals(response.getStatus().getCode(), 200);
+      Assert.assertEquals(response.getStatus().code(), 200);
 
       // Load the rest of the data
       numWritten += streamGenerator.run(

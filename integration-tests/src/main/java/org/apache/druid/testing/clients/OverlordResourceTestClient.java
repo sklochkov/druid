@@ -179,7 +179,7 @@ public class OverlordResourceTestClient
               ),
           StatusResponseHandler.getInstance()
       ).get();
-      LOG.info("Handoff early response code " + response.getStatus().getCode());
+      LOG.info("Handoff early response code " + response.getStatus().code());
       LOG.info("Handoff early response " + response.getContent());
       return response;
     }

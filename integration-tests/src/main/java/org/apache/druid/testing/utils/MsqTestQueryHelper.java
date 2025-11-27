@@ -143,8 +143,8 @@ public class MsqTestQueryHelper extends AbstractTestQueryHelper<MsqQueryWithResu
       throw new ISE(
           StringUtils.format(
               "Expected response status code [%d] when submitting task. Received response status code [%d], and response content:\n[%s]",
-              expectedResponseStatus.getCode(),
-              httpResponseStatus.getCode(),
+              expectedResponseStatus.code(),
+              httpResponseStatus.code(),
               statusResponseHolder.getContent()
           )
       );

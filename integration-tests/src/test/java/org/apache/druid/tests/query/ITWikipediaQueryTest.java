@@ -139,10 +139,10 @@ public class ITWikipediaQueryTest
 
           for (Future<StatusResponseHolder> future : futures) {
             StatusResponseHolder status = future.get();
-            if (status.getStatus().getCode() == QueryCapacityExceededException.STATUS_CODE) {
+            if (status.getStatus().code() == QueryCapacityExceededException.STATUS_CODE) {
               limited++;
               Assert.assertTrue(status.getContent().contains(QueryCapacityExceededException.makeLaneErrorMessage("one", 1)));
-            } else if (status.getStatus().getCode() == HttpResponseStatus.OK.getCode()) {
+            } else if (status.getStatus().code() == HttpResponseStatus.OK.code()) {
               success++;
             }
           }
@@ -169,14 +169,14 @@ public class ITWikipediaQueryTest
         getQueryBuilder().build()
     ).get();
 
-    Assert.assertEquals(followUp.getStatus().getCode(), HttpResponseStatus.OK.getCode());
+    Assert.assertEquals(followUp.getStatus().code(), HttpResponseStatus.OK.code());
 
     StatusResponseHolder andAnother = queryClient.queryAsync(
         queryHelper.getQueryURL(config.getBrokerUrl()),
         getQueryBuilder().build()
     ).get();
 
-    Assert.assertEquals(andAnother.getStatus().getCode(), HttpResponseStatus.OK.getCode());
+    Assert.assertEquals(andAnother.getStatus().code(), HttpResponseStatus.OK.code());
   }
 
   @Test
@@ -202,9 +202,9 @@ public class ITWikipediaQueryTest
 
     for (Future<StatusResponseHolder> future : futures) {
       StatusResponseHolder status = future.get();
-      if (status.getStatus().getCode() == QueryCapacityExceededException.STATUS_CODE) {
+      if (status.getStatus().code() == QueryCapacityExceededException.STATUS_CODE) {
         limited++;
-      } else if (status.getStatus().getCode() == HttpResponseStatus.OK.getCode()) {
+      } else if (status.getStatus().code() == HttpResponseStatus.OK.code()) {
         success++;
       }
     }

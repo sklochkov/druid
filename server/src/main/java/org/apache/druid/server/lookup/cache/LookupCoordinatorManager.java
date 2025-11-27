@@ -38,6 +38,7 @@ import com.google.common.util.concurrent.MoreExecutors;
 import com.google.inject.Inject;
 import io.netty.handler.codec.http.HttpMethod;
 import io.netty.handler.codec.http.HttpResponse;
+import io.netty.handler.codec.http.HttpContent;
 import org.apache.druid.audit.AuditInfo;
 import org.apache.druid.common.config.JacksonConfigManager;
 import org.apache.druid.concurrent.LifecycleLock;
@@ -55,7 +56,8 @@ import org.apache.druid.java.util.http.client.HttpClient;
 import org.apache.druid.java.util.http.client.Request;
 import org.apache.druid.java.util.http.client.response.ClientResponse;
 import org.apache.druid.java.util.http.client.response.HttpResponseHandler;
-import org.apache.druid.java.util.http.client.response.SequenceInputStreamResponseHandler;
+import org.apache.druid.java.util.http.client.response.BytesFullResponseHandler;
+import org.apache.druid.java.util.http.client.response.BytesFullResponseHolder;
 import org.apache.druid.query.lookup.LookupsState;
 import org.apache.druid.server.http.HostAndPortWithScheme;
 import org.apache.druid.server.listener.resource.ListenerResource;
@@ -64,6 +66,7 @@ import javax.annotation.Nullable;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.ByteArrayInputStream;
 import java.net.HttpURLConnection;
 import java.net.MalformedURLException;
 import java.net.URL;
@@ -897,14 +900,56 @@ public class LookupCoordinatorManager
         final AtomicReference<String> reasonString
     )
     {
-      return new SequenceInputStreamResponseHandler()
+      return new HttpResponseHandler<InputStream, InputStream>()
       {
+        private final BytesFullResponseHandler delegate = new BytesFullResponseHandler();
+        private ClientResponse<BytesFullResponseHolder> delegateResponse;
+
         @Override
         public ClientResponse<InputStream> handleResponse(HttpResponse response, TrafficCop trafficCop)
         {
           returnCode.set(response.getStatus().code());
           reasonString.set(response.getStatus().reasonPhrase());
-          return super.handleResponse(response, trafficCop);
+          delegateResponse = delegate.handleResponse(response, trafficCop);
+          return toInputStream(delegateResponse);
+        }
+
+        @Override
+        public ClientResponse<InputStream> handleChunk(
+            ClientResponse<InputStream> response,
+            HttpContent chunk,
+            long chunkNum
+        )
+        {
+          delegateResponse = delegate.handleChunk(delegateResponse, chunk, chunkNum);
+          return toInputStream(delegateResponse);
+        }
+
+        @Override
+        public ClientResponse<InputStream> done(ClientResponse<InputStream> response)
+        {
+          delegateResponse = delegate.done(delegateResponse);
+          return toInputStream(delegateResponse);
+        }
+
+        @Override
+        public void exceptionCaught(ClientResponse<InputStream> clientResponse, Throwable e)
+        {
+          delegate.exceptionCaught(null, e);
+        }
+
+        private ClientResponse<InputStream> toInputStream(ClientResponse<BytesFullResponseHolder> delegateResponse)
+        {
+          if (delegateResponse == null) {
+            return null;
+          }
+          BytesFullResponseHolder holder = delegateResponse.getObj();
+          InputStream stream = holder == null ? null : new ByteArrayInputStream(holder.getContent());
+          return new ClientResponse<>(
+              delegateResponse.isFinished(),
+              delegateResponse.isContinueReading(),
+              stream
+          );
         }
       };
     }

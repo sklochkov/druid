@@ -674,19 +674,19 @@
   </suppress>
   <suppress>
     <!-- Used in Pac4j. Pac4j versions (such as v5.7.3) corresponding
-    to the safe nimbus-jose-jwt v9.37.2 are incompatible with druid as they don't support JDK 8
+    to the safe nimbus-jose-jwt v9.37.4 are incompatible with druid as they don't support JDK 8
     https://www.pac4j.org/docs/alldocs.html -->
 
     <notes><![CDATA[
-   file name: nimbus-jose-jwt-8.22.1.jar
+   file name: nimbus-jose-jwt-9.37.4.jar
    ]]></notes>
     <cve>CVE-2023-52428</cve>
   </suppress>
   <suppress>
     <!-- Used in Azure dependencies.
-    Current latest version of Azure BOM (1.2.21) still uses 9.30.2, whereas bug resolved in 9.37.2 -->
+    Current latest version of Azure BOM (1.2.21) still uses 9.30.2, whereas bug resolved in 9.37.4; version overridden to 9.37.4 in build -->
     <notes><![CDATA[
-   file name: nimbus-jose-jwt-9.30.2.jar
+   file name: nimbus-jose-jwt-9.37.4.jar
    ]]></notes>
     <cve>CVE-2023-52428</cve>
   </suppress>

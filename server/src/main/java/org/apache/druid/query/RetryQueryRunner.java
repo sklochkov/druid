@@ -220,6 +220,23 @@ public class RetryQueryRunner<T> implements QueryRunner<T>
         final int maxNumRetries = queryContext.getNumRetriesOnMissingSegments(
             config.getNumTries()
         );
+        
+        // Log missing segments info for debugging coverage issues
+        if (!missingSegments.isEmpty()) {
+          final boolean allowPartial = queryContext.allowReturnPartialResults(config.isReturnPartialResults());
+          final boolean requireFullCoverage = queryContext.isRequireFullCoverage();
+          LOG.info(
+              "Query [%s] has [%d] missing segments after attempt [%d/%d]. "
+              + "requireFullCoverage=%s, allowPartialResults=%s",
+              queryPlus.getQuery().getId(),
+              missingSegments.size(),
+              retryCount,
+              maxNumRetries,
+              requireFullCoverage,
+              allowPartial
+          );
+        }
+        
         if (missingSegments.isEmpty()) {
           return false;
         } else if (retryCount >= maxNumRetries) {

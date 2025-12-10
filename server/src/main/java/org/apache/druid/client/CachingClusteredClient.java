@@ -571,6 +571,22 @@ public class CachingClusteredClient implements QuerySegmentWalker
       // Record coverage in response context (always, for visibility)
       responseContext.putSegmentCoverage(totalSegments, availableSegments);
 
+      // Log coverage info at INFO level when requireFullCoverage is set
+      if (minCoveragePercent > 0) {
+        float actualCoveragePercent = totalSegments > 0 ? (availableSegments * 100.0f) / totalSegments : 0;
+        log.info(
+            "Query [%s] pre-execution coverage check: %d/%d segments available (%.1f%%), required %.1f%%",
+            query.getId(),
+            availableSegments,
+            totalSegments,
+            actualCoveragePercent,
+            minCoveragePercent
+        );
+        if (!unavailableSegmentIds.isEmpty()) {
+          log.info("Query [%s] unavailable segments: %s", query.getId(), unavailableSegmentIds);
+        }
+      }
+
       // Validate coverage if required
       if (minCoveragePercent > 0 && totalSegments > 0) {
         float actualCoveragePercent = (availableSegments * 100.0f) / totalSegments;
@@ -741,12 +757,24 @@ public class CachingClusteredClient implements QuerySegmentWalker
         final SortedMap<DruidServer, List<SegmentDescriptor>> segmentsByServer
     )
     {
+      // Log query distribution for debugging incomplete coverage issues
+      if (log.isInfoEnabled() && query.context().isRequireFullCoverage()) {
+        log.info(
+            "Query [%s] distributing to [%d] servers with requireFullCoverage=true",
+            query.getId(),
+            segmentsByServer.size()
+        );
+        segmentsByServer.forEach((srv, segs) ->
+            log.info("Query [%s] -> server [%s] for [%d] segments", query.getId(), srv.getName(), segs.size())
+        );
+      }
+
       segmentsByServer.forEach((server, segmentsOfServer) -> {
         final QueryRunner serverRunner = serverView.getQueryRunner(server);
 
         if (serverRunner == null) {
-          log.error("Server [%s] doesn't have a query runner, marking [%d] segments as missing",
-              server.getName(), segmentsOfServer.size());
+          log.warn("Query [%s] server [%s] doesn't have a query runner, marking [%d] segments as missing",
+              query.getId(), server.getName(), segmentsOfServer.size());
           // Mark these segments as missing so RetryQueryRunner can detect and handle them
           responseContext.addMissingSegments(segmentsOfServer);
           return;
@@ -796,9 +824,12 @@ public class CachingClusteredClient implements QuerySegmentWalker
                 // Connection failed, timeout, or other error - mark segments as missing
                 log.warn(
                     thrown,
-                    "Server [%s] query failed, marking [%d] segments as missing",
+                    "Query [%s] server [%s] failed (isDone=%s), marking [%d] segments as missing: %s",
+                    query.getId(),
                     serverName,
-                    segmentsOfServer.size()
+                    isDone,
+                    segmentsOfServer.size(),
+                    thrown.getClass().getName()
                 );
                 responseContext.addMissingSegments(segmentsOfServer);
               }

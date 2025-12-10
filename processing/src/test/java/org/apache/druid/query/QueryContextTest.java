@@ -598,4 +598,46 @@ public class QueryContextTest
     QueryContext context = QueryContext.of(ImmutableMap.of());
     assertEquals(0.0f, context.getEffectiveMinCoveragePercent(), 0.001f);
   }
+
+  @Test
+  public void testAllowReturnPartialResultsDefaultTrue()
+  {
+    // Default should respect the provided default value
+    QueryContext context = QueryContext.of(ImmutableMap.of());
+    assertTrue(context.allowReturnPartialResults(true));
+    assertFalse(context.allowReturnPartialResults(false));
+  }
+
+  @Test
+  public void testAllowReturnPartialResultsExplicitFalse()
+  {
+    QueryContext context = QueryContext.of(ImmutableMap.of(
+        QueryContexts.RETURN_PARTIAL_RESULTS_KEY, false
+    ));
+    assertFalse(context.allowReturnPartialResults(true));
+  }
+
+  @Test
+  public void testAllowReturnPartialResultsWithRequireFullCoverage()
+  {
+    // When requireFullCoverage is true, partial results should NEVER be allowed
+    // regardless of the explicit returnPartialResults setting
+    QueryContext context = QueryContext.of(ImmutableMap.of(
+        QueryContexts.REQUIRE_FULL_COVERAGE_KEY, true,
+        QueryContexts.RETURN_PARTIAL_RESULTS_KEY, true
+    ));
+    // Even though returnPartialResults=true, requireFullCoverage=true should override it
+    assertFalse(context.allowReturnPartialResults(true));
+  }
+
+  @Test
+  public void testAllowReturnPartialResultsWithRequireFullCoverageOnly()
+  {
+    // When requireFullCoverage is true, partial results should be disallowed
+    QueryContext context = QueryContext.of(ImmutableMap.of(
+        QueryContexts.REQUIRE_FULL_COVERAGE_KEY, true
+    ));
+    assertFalse(context.allowReturnPartialResults(true));
+    assertFalse(context.allowReturnPartialResults(false));
+  }
 }

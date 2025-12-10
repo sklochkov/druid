@@ -533,15 +533,32 @@ public class QueryContext
     return getInt(QueryContexts.NUM_RETRIES_ON_MISSING_SEGMENTS_KEY, defaultValue);
   }
 
+  /**
+   * Returns true if partial results are allowed when some segments are missing.
+   * 
+   * If {@link #isRequireFullCoverage()} returns true, this method always returns false
+   * (partial results are NOT allowed), regardless of the explicit returnPartialResults setting.
+   * This ensures that requireFullCoverage=true provides end-to-end coverage validation,
+   * both at query planning time AND during query execution.
+   *
+   * @param defaultValue the default value if returnPartialResults is not explicitly set
+   * @return true if partial results are allowed, false if queries should fail on missing segments
+   */
   public boolean allowReturnPartialResults(boolean defaultValue)
   {
+    // If requireFullCoverage is set, never allow partial results
+    if (isRequireFullCoverage()) {
+      return false;
+    }
     return getBoolean(QueryContexts.RETURN_PARTIAL_RESULTS_KEY, defaultValue);
   }
 
   /**
    * Returns true if the query should fail when segment coverage is incomplete.
    * When true, queries will throw {@link IncompleteCoverageException} if any
-   * expected segments are unavailable.
+   * expected segments are unavailable at planning time, AND will throw
+   * {@link org.apache.druid.segment.SegmentMissingException} if segments become
+   * unavailable during query execution.
    */
   public boolean isRequireFullCoverage()
   {

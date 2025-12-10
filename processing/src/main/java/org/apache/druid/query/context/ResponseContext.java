@@ -462,6 +462,33 @@ public abstract class ResponseContext
     );
 
     /**
+     * Total number of segments expected for this query's datasource and intervals.
+     * Used together with {@link #SEGMENT_COVERAGE_AVAILABLE} to calculate coverage percentage.
+     */
+    public static final Key SEGMENT_COVERAGE_TOTAL = new CounterKey(
+        "segmentCoverageTotal",
+        true
+    );
+
+    /**
+     * Number of segments currently available/queryable for this query's datasource and intervals.
+     * Used together with {@link #SEGMENT_COVERAGE_TOTAL} to calculate coverage percentage.
+     */
+    public static final Key SEGMENT_COVERAGE_AVAILABLE = new CounterKey(
+        "segmentCoverageAvailable",
+        true
+    );
+
+    /**
+     * Indicates if segment coverage is incomplete (true/false).
+     * This is set to true when some segments expected by the query are not available.
+     */
+    public static final Key SEGMENT_COVERAGE_INCOMPLETE = new BooleanKey(
+        "segmentCoverageIncomplete",
+        true
+    );
+
+    /**
      * One and only global list of keys. This is a semi-constant: it is mutable
      * at start-up time, but then is not thread-safe, and must remain unchanged
      * for the duration of the server run.
@@ -489,6 +516,9 @@ public abstract class ResponseContext
               NUM_SCANNED_ROWS,
               CPU_CONSUMED_NANOS,
               TRUNCATED,
+              SEGMENT_COVERAGE_TOTAL,
+              SEGMENT_COVERAGE_AVAILABLE,
+              SEGMENT_COVERAGE_INCOMPLETE,
               }
       );
     }
@@ -639,6 +669,43 @@ public abstract class ResponseContext
   public void putQueryFailDeadlineMs(long deadlineMs)
   {
     putValue(Keys.QUERY_FAIL_DEADLINE_MILLIS, deadlineMs);
+  }
+
+  /**
+   * Records segment coverage information for this query.
+   *
+   * @param totalSegments     total number of segments expected for this query
+   * @param availableSegments number of segments actually available/queryable
+   */
+  public void putSegmentCoverage(int totalSegments, int availableSegments)
+  {
+    putValue(Keys.SEGMENT_COVERAGE_TOTAL, (long) totalSegments);
+    putValue(Keys.SEGMENT_COVERAGE_AVAILABLE, (long) availableSegments);
+    putValue(Keys.SEGMENT_COVERAGE_INCOMPLETE, availableSegments < totalSegments);
+  }
+
+  /**
+   * Returns the total number of segments expected for this query, or null if not set.
+   */
+  public Long getSegmentCoverageTotal()
+  {
+    return (Long) get(Keys.SEGMENT_COVERAGE_TOTAL);
+  }
+
+  /**
+   * Returns the number of available segments for this query, or null if not set.
+   */
+  public Long getSegmentCoverageAvailable()
+  {
+    return (Long) get(Keys.SEGMENT_COVERAGE_AVAILABLE);
+  }
+
+  /**
+   * Returns true if segment coverage is incomplete, false otherwise, or null if not set.
+   */
+  public Boolean isSegmentCoverageIncomplete()
+  {
+    return (Boolean) get(Keys.SEGMENT_COVERAGE_INCOMPLETE);
   }
 
   /**

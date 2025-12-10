@@ -516,4 +516,86 @@ public class QueryContextTest
       return new LegacyContextQuery(contextOverride);
     }
   }
+
+  // Tests for segment coverage context parameters
+
+  @Test
+  public void testRequireFullCoverageDefault()
+  {
+    QueryContext context = QueryContext.of(ImmutableMap.of());
+    assertFalse(context.isRequireFullCoverage());
+  }
+
+  @Test
+  public void testRequireFullCoverageTrue()
+  {
+    QueryContext context = QueryContext.of(ImmutableMap.of(
+        QueryContexts.REQUIRE_FULL_COVERAGE_KEY, true
+    ));
+    assertTrue(context.isRequireFullCoverage());
+  }
+
+  @Test
+  public void testRequireFullCoverageStringTrue()
+  {
+    QueryContext context = QueryContext.of(ImmutableMap.of(
+        QueryContexts.REQUIRE_FULL_COVERAGE_KEY, "true"
+    ));
+    assertTrue(context.isRequireFullCoverage());
+  }
+
+  @Test
+  public void testMinCoveragePercentDefault()
+  {
+    QueryContext context = QueryContext.of(ImmutableMap.of());
+    assertEquals(0.0f, context.getMinCoveragePercent(), 0.001f);
+  }
+
+  @Test
+  public void testMinCoveragePercentCustomValue()
+  {
+    QueryContext context = QueryContext.of(ImmutableMap.of(
+        QueryContexts.MIN_COVERAGE_PERCENT_KEY, 80.0f
+    ));
+    assertEquals(80.0f, context.getMinCoveragePercent(), 0.001f);
+  }
+
+  @Test
+  public void testMinCoveragePercentFromString()
+  {
+    QueryContext context = QueryContext.of(ImmutableMap.of(
+        QueryContexts.MIN_COVERAGE_PERCENT_KEY, "75.5"
+    ));
+    assertEquals(75.5f, context.getMinCoveragePercent(), 0.001f);
+  }
+
+  @Test
+  public void testEffectiveMinCoveragePercentWithRequireFull()
+  {
+    // When requireFullCoverage is true, effective coverage should be 100%
+    QueryContext context = QueryContext.of(ImmutableMap.of(
+        QueryContexts.REQUIRE_FULL_COVERAGE_KEY, true,
+        QueryContexts.MIN_COVERAGE_PERCENT_KEY, 50.0f
+    ));
+    assertEquals(100.0f, context.getEffectiveMinCoveragePercent(), 0.001f);
+  }
+
+  @Test
+  public void testEffectiveMinCoveragePercentWithoutRequireFull()
+  {
+    // When requireFullCoverage is false, effective coverage should be minCoveragePercent
+    QueryContext context = QueryContext.of(ImmutableMap.of(
+        QueryContexts.REQUIRE_FULL_COVERAGE_KEY, false,
+        QueryContexts.MIN_COVERAGE_PERCENT_KEY, 75.0f
+    ));
+    assertEquals(75.0f, context.getEffectiveMinCoveragePercent(), 0.001f);
+  }
+
+  @Test
+  public void testEffectiveMinCoveragePercentDefaultValues()
+  {
+    // With default values, effective coverage should be 0 (no requirement)
+    QueryContext context = QueryContext.of(ImmutableMap.of());
+    assertEquals(0.0f, context.getEffectiveMinCoveragePercent(), 0.001f);
+  }
 }

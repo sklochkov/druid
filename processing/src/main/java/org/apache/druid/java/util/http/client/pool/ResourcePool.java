@@ -108,6 +108,13 @@ public class ResourcePool<K, V> implements Closeable
     }
     final V value = holder.get();
 
+    // If value is null (e.g., due to timeout waiting for pool), return null container
+    // This allows callers to handle pool exhaustion gracefully
+    if (value == null) {
+      log.warn("Failed to acquire resource from pool for key[%s] (pool exhausted or timeout)", key);
+      return null;
+    }
+
     return new ResourceContainer<V>()
     {
       private final AtomicBoolean returned = new AtomicBoolean(false);
@@ -231,8 +238,13 @@ public class ResourcePool<K, V> implements Closeable
       this.resourceHolderList = new ArrayDeque<>();
     }
 
+    // Maximum time to wait for a connection from the pool (30 seconds)
+    // Prevents indefinite blocking during connection pool exhaustion
+    private static final long POOL_WAIT_TIMEOUT_MS = 30_000;
+
     /**
-     * Returns a resource or null if this holder is already closed or the current thread is interrupted.
+     * Returns a resource or null if this holder is already closed, the current thread is interrupted,
+     * or the wait times out.
      *
      * Try to return a previously created resource if it isGood(). Else, generate a new resource
      */
@@ -243,9 +255,17 @@ public class ResourcePool<K, V> implements Closeable
       // resourceHolderList can't have nulls, so we'll use a null to signal that we need to create a new resource.
       boolean expired = false;
       synchronized (this) {
+        long waitStart = System.currentTimeMillis();
         while (!closed && (numLentResources == maxSize)) {
           try {
-            this.wait();
+            long elapsed = System.currentTimeMillis() - waitStart;
+            long remaining = POOL_WAIT_TIMEOUT_MS - elapsed;
+            if (remaining <= 0) {
+              log.warn("Timed out waiting for connection from pool for key[%s] after %dms (pool exhausted: %d/%d in use)",
+                  key, POOL_WAIT_TIMEOUT_MS, numLentResources, maxSize);
+              return null;
+            }
+            this.wait(remaining);
           }
           catch (InterruptedException e) {
             Thread.currentThread().interrupt();

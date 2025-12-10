@@ -538,6 +538,39 @@ public class QueryContext
     return getBoolean(QueryContexts.RETURN_PARTIAL_RESULTS_KEY, defaultValue);
   }
 
+  /**
+   * Returns true if the query should fail when segment coverage is incomplete.
+   * When true, queries will throw {@link IncompleteCoverageException} if any
+   * expected segments are unavailable.
+   */
+  public boolean isRequireFullCoverage()
+  {
+    return getBoolean(QueryContexts.REQUIRE_FULL_COVERAGE_KEY, QueryContexts.DEFAULT_REQUIRE_FULL_COVERAGE);
+  }
+
+  /**
+   * Returns the minimum percentage of segments that must be available for the query to proceed.
+   * Returns 0.0 by default, meaning no minimum coverage requirement.
+   * If {@link #isRequireFullCoverage()} returns true, this value is effectively 100.0.
+   */
+  public float getMinCoveragePercent()
+  {
+    return getFloat(QueryContexts.MIN_COVERAGE_PERCENT_KEY, QueryContexts.DEFAULT_MIN_COVERAGE_PERCENT);
+  }
+
+  /**
+   * Returns the effective minimum coverage percentage required for this query.
+   * If requireFullCoverage is true, returns 100.0. Otherwise returns the value
+   * of minCoveragePercent (which defaults to 0.0).
+   */
+  public float getEffectiveMinCoveragePercent()
+  {
+    if (isRequireFullCoverage()) {
+      return 100.0f;
+    }
+    return getMinCoveragePercent();
+  }
+
   public boolean getEnableJoinFilterRewriteValueColumnFilters()
   {
     return getBoolean(

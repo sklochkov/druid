@@ -87,6 +87,12 @@ public class QueryContexts
   public static final String SERIALIZE_DATE_TIME_AS_LONG_INNER_KEY = "serializeDateTimeAsLongInner";
   public static final String UNCOVERED_INTERVALS_LIMIT_KEY = "uncoveredIntervalsLimit";
   public static final String MIN_TOP_N_THRESHOLD = "minTopNThreshold";
+
+  // Segment coverage validation keys
+  // When true, fail the query if any expected segments are unavailable
+  public static final String REQUIRE_FULL_COVERAGE_KEY = "requireFullCoverage";
+  // Minimum percentage of segments that must be available (0-100)
+  public static final String MIN_COVERAGE_PERCENT_KEY = "minCoveragePercent";
   public static final String CATALOG_VALIDATION_ENABLED = "catalogValidationEnabled";
   // this flag controls whether the topN engine can use the 'pooled' algorithm when query granularity is set to
   // anything other than 'ALL' and the cardinality + number of aggregators would require more size than is available
@@ -139,6 +145,8 @@ public class QueryContexts
   public static final int DEFAULT_IN_FUNCTION_EXPR_THRESHOLD = 2;
   public static final boolean DEFAULT_ENABLE_TIME_BOUNDARY_PLANNING = false;
   public static final boolean DEFAULT_CATALOG_VALIDATION_ENABLED = true;
+  public static final boolean DEFAULT_REQUIRE_FULL_COVERAGE = false;
+  public static final float DEFAULT_MIN_COVERAGE_PERCENT = 0.0f;
 
   @SuppressWarnings("unused") // Used by Jackson serialization
   public enum Vectorize

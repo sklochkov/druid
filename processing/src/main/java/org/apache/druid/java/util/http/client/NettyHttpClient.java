@@ -126,6 +126,16 @@ public class NettyHttpClient extends AbstractHttpClient
     final Channel channel;
     final String hostKey = getPoolKey(url);
     final ResourceContainer<ChannelFuture> channelResourceContainer = pool.take(hostKey);
+
+    // Handle pool exhaustion - take() returns null if pool is exhausted or timed out
+    if (channelResourceContainer == null) {
+      return Futures.immediateFailedFuture(
+          new ChannelException(
+              "Connection pool exhausted or timed out for host: " + hostKey
+          )
+      );
+    }
+
     final ChannelFuture channelFuture = channelResourceContainer.get().awaitUninterruptibly();
     if (!channelFuture.isSuccess()) {
       channelResourceContainer.returnResource(); // Some other poor sap will have to deal with it...

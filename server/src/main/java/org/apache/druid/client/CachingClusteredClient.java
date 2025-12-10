@@ -59,6 +59,7 @@ import org.apache.druid.query.BrokerParallelMergeConfig;
 import org.apache.druid.query.BySegmentResultValueClass;
 import org.apache.druid.query.CacheStrategy;
 import org.apache.druid.query.Queries;
+import org.apache.druid.query.IncompleteCoverageException;
 import org.apache.druid.query.Query;
 import org.apache.druid.query.QueryContext;
 import org.apache.druid.query.QueryContexts;
@@ -94,6 +95,7 @@ import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Iterator;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -264,6 +266,7 @@ public class CachingClusteredClient implements QuerySegmentWalker
     private final boolean populateCache;
     private final boolean isBySegment;
     private final int uncoveredIntervalsLimit;
+    private final float minCoveragePercent;
     private final Map<String, Cache.NamedKey> cachePopulatorKeyMap = new HashMap<>();
     private final DataSourceAnalysis dataSourceAnalysis;
     private final List<Interval> intervals;
@@ -285,6 +288,8 @@ public class CachingClusteredClient implements QuerySegmentWalker
       // Note that enabling this leads to putting uncovered intervals information in the response headers
       // and might blow up in some cases https://github.com/apache/druid/issues/2108
       this.uncoveredIntervalsLimit = queryContext.getUncoveredIntervalsLimit();
+      // Minimum coverage percentage required for this query (0 = no requirement, 100 = requireFullCoverage)
+      this.minCoveragePercent = queryContext.getEffectiveMinCoveragePercent();
       // For nested queries, we need to look at the intervals of the inner most query.
       this.intervals = dataSourceAnalysis.getBaseQuerySegmentSpec()
                                          .map(QuerySegmentSpec::getIntervals)
@@ -343,6 +348,10 @@ public class CachingClusteredClient implements QuerySegmentWalker
       if (uncoveredIntervalsLimit > 0) {
         computeUncoveredIntervals(timeline);
       }
+
+      // Compute segment coverage and validate if minCoveragePercent > 0
+      // This will throw IncompleteCoverageException if coverage is insufficient
+      computeAndValidateSegmentCoverage(timeline, specificSegments);
 
       final Set<SegmentServerSelector> segmentServers = computeSegmentsToQuery(timeline, specificSegments);
       @Nullable
@@ -518,6 +527,68 @@ public class CachingClusteredClient implements QuerySegmentWalker
         // incomplete. The data could exist and just not be loaded yet.  In either
         // case, though, this query will not include any data from the identified intervals.
         responseContext.putUncoveredIntervals(uncoveredIntervals, uncoveredIntervalsOverflowed);
+      }
+    }
+
+    /**
+     * Computes segment coverage for the query and records it in the response context.
+     * If minCoveragePercent > 0, validates that coverage meets the threshold and throws
+     * {@link IncompleteCoverageException} if it doesn't.
+     *
+     * @param timeline the timeline to check for segment coverage
+     * @param specificSegments whether to include incomplete partitions
+     * @throws IncompleteCoverageException if coverage is below the required minimum percentage
+     */
+    private void computeAndValidateSegmentCoverage(
+        TimelineLookup<String, ServerSelector> timeline,
+        boolean specificSegments
+    )
+    {
+      final java.util.function.Function<Interval, List<TimelineObjectHolder<String, ServerSelector>>> lookupFn
+          = specificSegments ? timeline::lookupWithIncompletePartitions : timeline::lookup;
+
+      int totalSegments = 0;
+      int availableSegments = 0;
+      final Set<String> unavailableSegmentIds = new HashSet<>();
+
+      for (Interval interval : intervals) {
+        List<TimelineObjectHolder<String, ServerSelector>> holders = lookupFn.apply(interval);
+        for (TimelineObjectHolder<String, ServerSelector> holder : holders) {
+          for (PartitionChunk<ServerSelector> chunk : holder.getObject()) {
+            totalSegments++;
+            ServerSelector serverSelector = chunk.getObject();
+            if (!serverSelector.isEmpty()) {
+              availableSegments++;
+            } else {
+              // Track the ID of the unavailable segment for debugging
+              unavailableSegmentIds.add(serverSelector.getSegment().getId().toString());
+            }
+          }
+        }
+      }
+
+      // Record coverage in response context (always, for visibility)
+      responseContext.putSegmentCoverage(totalSegments, availableSegments);
+
+      // Validate coverage if required
+      if (minCoveragePercent > 0 && totalSegments > 0) {
+        float actualCoveragePercent = (availableSegments * 100.0f) / totalSegments;
+        if (actualCoveragePercent < minCoveragePercent) {
+          // Get datasource name for the error message
+          String dataSourceName = dataSourceAnalysis.getBaseDataSource()
+              .getTableNames()
+              .stream()
+              .findFirst()
+              .orElse("unknown");
+
+          throw new IncompleteCoverageException(
+              dataSourceName,
+              totalSegments,
+              availableSegments,
+              minCoveragePercent,
+              unavailableSegmentIds
+          );
+        }
       }
     }
 

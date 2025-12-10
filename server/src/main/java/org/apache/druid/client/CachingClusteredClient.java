@@ -52,6 +52,7 @@ import org.apache.druid.java.util.common.guava.BaseSequence;
 import org.apache.druid.java.util.common.guava.LazySequence;
 import org.apache.druid.java.util.common.guava.ParallelMergeCombiningSequence;
 import org.apache.druid.java.util.common.guava.Sequence;
+import org.apache.druid.java.util.common.guava.SequenceWrapper;
 import org.apache.druid.java.util.common.guava.Sequences;
 import org.apache.druid.java.util.emitter.EmittingLogger;
 import org.apache.druid.java.util.emitter.service.ServiceEmitter;
@@ -763,8 +764,47 @@ public class CachingClusteredClient implements QuerySegmentWalker
         } else {
           serverResults = getAndCacheServerResults(serverRunner, segmentsOfServer, maxQueuedBytesPerServer);
         }
-        listOfSequences.add(serverResults);
+        // Wrap the sequence with error handling to mark segments as missing on failure
+        listOfSequences.add(wrapSequenceWithMissingSegmentHandler(serverResults, segmentsOfServer, server.getName()));
       });
+    }
+
+    /**
+     * Wraps a sequence with error handling that marks segments as missing when the sequence
+     * fails during iteration. This is critical for detecting failures during query execution
+     * (e.g., when a Historical goes down mid-query or connection times out).
+     *
+     * @param sequence        the sequence to wrap
+     * @param segmentsOfServer segments that this sequence is responsible for
+     * @param serverName      the server name for logging
+     * @return wrapped sequence that marks segments as missing on failure
+     */
+    private Sequence<T> wrapSequenceWithMissingSegmentHandler(
+        final Sequence<T> sequence,
+        final List<SegmentDescriptor> segmentsOfServer,
+        final String serverName
+    )
+    {
+      return Sequences.wrap(
+          sequence,
+          new SequenceWrapper()
+          {
+            @Override
+            public void after(boolean isDone, Throwable thrown) throws Exception
+            {
+              if (thrown != null) {
+                // Connection failed, timeout, or other error - mark segments as missing
+                log.warn(
+                    thrown,
+                    "Server [%s] query failed, marking [%d] segments as missing",
+                    serverName,
+                    segmentsOfServer.size()
+                );
+                responseContext.addMissingSegments(segmentsOfServer);
+              }
+            }
+          }
+      );
     }
 
     @SuppressWarnings("unchecked")

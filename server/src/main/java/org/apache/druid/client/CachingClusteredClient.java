@@ -382,13 +382,15 @@ public class CachingClusteredClient implements QuerySegmentWalker
           ServerSelector selector = segmentServer.getServer();
           SegmentDescriptor segment = segmentServer.getSegmentDescriptor();
           QueryableDruidServer pickedServer = selector.pick(query);
+          List<DruidServerMetadata> allServers = selector.getAllServers();
           log.info(
-              "[TRACE] Query [%s] segment [%s_%s_%s] has %d servers, picked: %s",
+              "[TRACE] Query [%s] segment [%s_%s_%s] has %d servers %s, picked: %s",
               query.getId(),
               segment.getInterval(),
               segment.getVersion(),
               segment.getPartitionNumber(),
-              selector.size(),
+              allServers.size(),
+              allServers.stream().map(DruidServerMetadata::getName).collect(Collectors.toList()),
               pickedServer != null ? pickedServer.getServer().getName() : "NONE"
           );
         }

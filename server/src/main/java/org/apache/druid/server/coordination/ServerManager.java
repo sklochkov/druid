@@ -271,11 +271,10 @@ public class ServerManager implements QuerySegmentWalker
     final ReferenceCountingSegment segment = chunk.getObject();
     if (traceQuery) {
       log.info(
-          "[TRACE] Query [%s] Historical segment FOUND: %s, id=%s, rows=%d",
+          "[TRACE] Query [%s] Historical segment FOUND: %s, id=%s",
           query.getId(),
           descriptor,
-          segment.getId(),
-          segment.getNumRows()
+          segment.getId()
       );
     }
     return buildAndDecorateQueryRunner(

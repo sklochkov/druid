@@ -588,6 +588,59 @@ public class QueryContext
     return getMinCoveragePercent();
   }
 
+  /**
+   * Returns true if query tracing is enabled for this query.
+   * 
+   * Tracing can be enabled by setting the context parameter "traceQuery" to:
+   * - true: trace this query
+   * - A number N: trace approximately every Nth query (based on query ID hash)
+   * 
+   * When tracing is enabled, detailed INFO-level logs are emitted at key points
+   * in the query lifecycle to help diagnose issues like incomplete results.
+   */
+  public boolean isTraceQuery()
+  {
+    Object traceValue = get(QueryContexts.TRACE_QUERY_KEY);
+    if (traceValue == null) {
+      return false;
+    }
+    if (traceValue instanceof Boolean) {
+      return (Boolean) traceValue;
+    }
+    if (traceValue instanceof String) {
+      String strValue = (String) traceValue;
+      if ("true".equalsIgnoreCase(strValue)) {
+        return true;
+      }
+      if ("false".equalsIgnoreCase(strValue)) {
+        return false;
+      }
+      // Treat as sample rate - trace if queryId hash mod sampleRate == 0
+      try {
+        int sampleRate = Integer.parseInt(strValue);
+        if (sampleRate > 0) {
+          String queryId = getString(BaseQuery.QUERY_ID);
+          if (queryId != null) {
+            return (Math.abs(queryId.hashCode()) % sampleRate) == 0;
+          }
+        }
+      }
+      catch (NumberFormatException e) {
+        // Not a valid number, don't trace
+      }
+    }
+    if (traceValue instanceof Number) {
+      int sampleRate = ((Number) traceValue).intValue();
+      if (sampleRate > 0) {
+        String queryId = getString(BaseQuery.QUERY_ID);
+        if (queryId != null) {
+          return (Math.abs(queryId.hashCode()) % sampleRate) == 0;
+        }
+      }
+    }
+    return false;
+  }
+
   public boolean getEnableJoinFilterRewriteValueColumnFilters()
   {
     return getBoolean(

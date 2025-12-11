@@ -247,6 +247,8 @@ public class ServerManager implements QuerySegmentWalker
       Optional<byte[]> cacheKeyPrefix
   )
   {
+    final boolean traceQuery = query.context().isTraceQuery();
+    
     final PartitionChunk<ReferenceCountingSegment> chunk = timeline.findChunk(
         descriptor.getInterval(),
         descriptor.getVersion(),
@@ -254,10 +256,28 @@ public class ServerManager implements QuerySegmentWalker
     );
 
     if (chunk == null) {
+      if (traceQuery) {
+        log.info(
+            "[TRACE] Query [%s] Historical segment NOT FOUND in timeline: interval=%s, version=%s, partition=%d",
+            query.getId(),
+            descriptor.getInterval(),
+            descriptor.getVersion(),
+            descriptor.getPartitionNumber()
+        );
+      }
       return new ReportTimelineMissingSegmentQueryRunner<>(descriptor);
     }
 
     final ReferenceCountingSegment segment = chunk.getObject();
+    if (traceQuery) {
+      log.info(
+          "[TRACE] Query [%s] Historical segment FOUND: %s, id=%s, rows=%d",
+          query.getId(),
+          descriptor,
+          segment.getId(),
+          segment.getNumRows()
+      );
+    }
     return buildAndDecorateQueryRunner(
         factory,
         toolChest,

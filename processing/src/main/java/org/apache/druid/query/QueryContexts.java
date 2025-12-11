@@ -93,6 +93,10 @@ public class QueryContexts
   public static final String REQUIRE_FULL_COVERAGE_KEY = "requireFullCoverage";
   // Minimum percentage of segments that must be available (0-100)
   public static final String MIN_COVERAGE_PERCENT_KEY = "minCoveragePercent";
+  
+  // Query tracing - enables verbose INFO logging of query lifecycle
+  // Can be set to true, or to a sample rate like "100" (trace every 100th query)
+  public static final String TRACE_QUERY_KEY = "traceQuery";
   public static final String CATALOG_VALIDATION_ENABLED = "catalogValidationEnabled";
   // this flag controls whether the topN engine can use the 'pooled' algorithm when query granularity is set to
   // anything other than 'ALL' and the cardinality + number of aggregators would require more size than is available

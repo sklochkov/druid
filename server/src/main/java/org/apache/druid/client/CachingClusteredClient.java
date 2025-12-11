@@ -338,10 +338,25 @@ public class CachingClusteredClient implements QuerySegmentWalker
         final boolean specificSegments
     )
     {
+      final boolean traceQuery = query.context().isTraceQuery();
+      
+      if (traceQuery) {
+        log.info(
+            "[TRACE] Query [%s] starting. datasource=%s, intervals=%s, specificSegments=%s",
+            query.getId(),
+            dataSourceAnalysis.getBaseDataSource().getTableNames(),
+            intervals,
+            specificSegments
+        );
+      }
+
       final Optional<? extends TimelineLookup<String, ServerSelector>> maybeTimeline = serverView.getTimeline(
           dataSourceAnalysis
       );
       if (!maybeTimeline.isPresent()) {
+        if (traceQuery) {
+          log.info("[TRACE] Query [%s] no timeline present, returning empty", query.getId());
+        }
         return new ClusterQueryResult<>(Sequences.empty(), 0);
       }
 
@@ -355,6 +370,30 @@ public class CachingClusteredClient implements QuerySegmentWalker
       computeAndValidateSegmentCoverage(timeline, specificSegments);
 
       final Set<SegmentServerSelector> segmentServers = computeSegmentsToQuery(timeline, specificSegments);
+      
+      if (traceQuery) {
+        log.info(
+            "[TRACE] Query [%s] computed %d segment-server pairs",
+            query.getId(),
+            segmentServers.size()
+        );
+        // Log each segment and its available servers
+        for (SegmentServerSelector segmentServer : segmentServers) {
+          ServerSelector selector = segmentServer.getServer();
+          SegmentDescriptor segment = segmentServer.getSegmentDescriptor();
+          QueryableDruidServer pickedServer = selector.pick(query);
+          log.info(
+              "[TRACE] Query [%s] segment [%s_%s_%s] has %d servers, picked: %s",
+              query.getId(),
+              segment.getInterval(),
+              segment.getVersion(),
+              segment.getPartitionNumber(),
+              selector.size(),
+              pickedServer != null ? pickedServer.getServer().getName() : "NONE"
+          );
+        }
+      }
+
       @Nullable
       final byte[] queryCacheKey = cacheKeyManager.computeSegmentLevelQueryCacheKey();
       @Nullable
@@ -366,6 +405,9 @@ public class CachingClusteredClient implements QuerySegmentWalker
           responseContext.putEntityTag(currentEtag);
         }
         if (currentEtag != null && currentEtag.equals(prevEtag)) {
+          if (traceQuery) {
+            log.info("[TRACE] Query [%s] ETag match, returning cached", query.getId());
+          }
           return new ClusterQueryResult<>(Sequences.empty(), 0);
         }
       }
@@ -379,7 +421,31 @@ public class CachingClusteredClient implements QuerySegmentWalker
       queryPlus.getQueryMetrics().reportQueriedSegmentCount(segmentServers.size()).emit(emitter);
 
       final SortedMap<DruidServer, List<SegmentDescriptor>> segmentsByServer = groupSegmentsByServer(segmentServers);
+      
+      if (traceQuery) {
+        log.info(
+            "[TRACE] Query [%s] distributing to %d servers, %d from cache",
+            query.getId(),
+            segmentsByServer.size(),
+            alreadyCachedResults.size()
+        );
+        segmentsByServer.forEach((server, segments) ->
+            log.info(
+                "[TRACE] Query [%s] -> server [%s] type=%s for %d segments: %s",
+                query.getId(),
+                server.getName(),
+                server.getType(),
+                segments.size(),
+                segments
+            )
+        );
+      }
+
+      final boolean finalTraceQuery = traceQuery;
       LazySequence<T> mergedResultSequence = new LazySequence<>(() -> {
+        if (finalTraceQuery) {
+          log.info("[TRACE] Query [%s] executing merge sequence", query.getId());
+        }
         List<Sequence<T>> sequencesByInterval = new ArrayList<>(alreadyCachedResults.size() + segmentsByServer.size());
         addSequencesFromCache(sequencesByInterval, alreadyCachedResults);
         addSequencesFromServer(sequencesByInterval, segmentsByServer);

@@ -351,6 +351,18 @@ public class DirectDruidClient<T> implements QueryRunner<T>
           long stopTimeNs = System.nanoTime();
           long nodeTimeNs = stopTimeNs - requestStartTimeNs;
           final long nodeTimeMs = TimeUnit.NANOSECONDS.toMillis(nodeTimeNs);
+          
+          // Trace logging for debugging incomplete query results during rolling restarts
+          if (query.context().isTraceQuery()) {
+            log.info(
+                "[TRACE] Query [%s] DirectDruidClient response completed: url=[%s], bytes=%,d, timeMs=%,d",
+                query.getId(),
+                url,
+                totalByteCount.get(),
+                nodeTimeMs
+            );
+          }
+          
           log.debug(
               "Completed queryId[%s] request to url[%s] with %,d bytes returned in %,d millis [%,f b/s].",
               query.getId(),
@@ -396,6 +408,18 @@ public class DirectDruidClient<T> implements QueryRunner<T>
               url,
               e.getMessage()
           );
+          
+          // Trace logging for debugging incomplete query results during rolling restarts
+          if (query.context().isTraceQuery()) {
+            log.info(
+                "[TRACE] Query [%s] DirectDruidClient exception: url=[%s], exception=%s: %s",
+                query.getId(),
+                url,
+                e.getClass().getName(),
+                e.getMessage()
+            );
+          }
+          
           setupResponseReadFailure(msg, e);
         }
 

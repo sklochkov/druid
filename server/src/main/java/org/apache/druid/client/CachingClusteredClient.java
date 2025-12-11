@@ -44,6 +44,7 @@ import org.apache.druid.guice.annotations.Client;
 import org.apache.druid.guice.annotations.Merging;
 import org.apache.druid.guice.annotations.Smile;
 import org.apache.druid.guice.http.DruidHttpClientConfig;
+import org.apache.druid.client.coordinator.CoordinatorClient;
 import org.apache.druid.java.util.common.Intervals;
 import org.apache.druid.java.util.common.Pair;
 import org.apache.druid.java.util.common.StringUtils;
@@ -131,6 +132,8 @@ public class CachingClusteredClient implements QuerySegmentWalker
   private final ForkJoinPool pool;
   private final QueryScheduler scheduler;
   private final ServiceEmitter emitter;
+  @Nullable
+  private final CoordinatorClient coordinatorClient;
 
   @Inject
   public CachingClusteredClient(
@@ -144,7 +147,8 @@ public class CachingClusteredClient implements QuerySegmentWalker
       BrokerParallelMergeConfig parallelMergeConfig,
       @Merging ForkJoinPool pool,
       QueryScheduler scheduler,
-      ServiceEmitter emitter
+      ServiceEmitter emitter,
+      @Nullable CoordinatorClient coordinatorClient
   )
   {
     this.warehouse = warehouse;
@@ -158,6 +162,7 @@ public class CachingClusteredClient implements QuerySegmentWalker
     this.pool = pool;
     this.scheduler = scheduler;
     this.emitter = emitter;
+    this.coordinatorClient = coordinatorClient;
 
     if (cacheConfig.isQueryCacheable(Query.GROUP_BY) && (cacheConfig.isUseCache() || cacheConfig.isPopulateCache())) {
       log.warn(
@@ -361,6 +366,18 @@ public class CachingClusteredClient implements QuerySegmentWalker
       }
 
       final TimelineLookup<String, ServerSelector> timeline = timelineConverter.apply(maybeTimeline.get());
+      
+      // Detailed timeline dump for debugging segment availability issues
+      if (traceQuery) {
+        logTimelineContents(timeline, query.getId());
+      }
+      
+      // Compare timeline against Coordinator metadata to detect "invisible" segments
+      // This check is performed when traceQuery is enabled OR requireFullCoverage is set
+      if (traceQuery || minCoveragePercent >= 100.0f) {
+        compareTimelineWithMetadata(timeline, query.getId(), traceQuery);
+      }
+      
       if (uncoveredIntervalsLimit > 0) {
         computeUncoveredIntervals(timeline);
       }
@@ -677,6 +694,178 @@ public class CachingClusteredClient implements QuerySegmentWalker
       }
     }
 
+    /**
+     * Logs detailed timeline contents for debugging segment availability issues.
+     * Shows all segments in the timeline along with which servers have them.
+     */
+    private void logTimelineContents(TimelineLookup<String, ServerSelector> timeline, String queryId)
+    {
+      try {
+        // Get the datasource name
+        String dataSourceName = dataSourceAnalysis.getBaseDataSource()
+            .getTableNames()
+            .stream()
+            .findFirst()
+            .orElse("unknown");
+        
+        // Iterate over all intervals to dump timeline contents
+        // Use a very wide interval to capture everything
+        List<TimelineObjectHolder<String, ServerSelector>> allHolders = 
+            timeline.lookup(Intervals.ETERNITY);
+        
+        log.info(
+            "[TRACE] Query [%s] Timeline dump for datasource [%s]: %d timeline entries",
+            queryId,
+            dataSourceName,
+            allHolders.size()
+        );
+        
+        for (TimelineObjectHolder<String, ServerSelector> holder : allHolders) {
+          for (PartitionChunk<ServerSelector> chunk : holder.getObject()) {
+            ServerSelector selector = chunk.getObject();
+            DataSegment segment = selector.getSegment();
+            List<DruidServerMetadata> servers = selector.getAllServers();
+            
+            log.info(
+                "[TRACE] Query [%s] Timeline segment: id=[%s] interval=[%s] version=[%s] partition=[%d] "
+                + "servers=%d %s isEmpty=%s",
+                queryId,
+                segment.getId(),
+                holder.getInterval(),
+                holder.getVersion(),
+                chunk.getChunkNumber(),
+                servers.size(),
+                servers.stream().map(DruidServerMetadata::getName).collect(Collectors.toList()),
+                selector.isEmpty()
+            );
+          }
+        }
+        
+        // Also log what intervals we're querying
+        log.info(
+            "[TRACE] Query [%s] Requested intervals: %s",
+            queryId,
+            intervals
+        );
+      }
+      catch (Exception e) {
+        log.warn(e, "[TRACE] Query [%s] Failed to dump timeline contents", queryId);
+      }
+    }
+
+    /**
+     * Compares the Broker's timeline against Coordinator metadata to detect segments
+     * that should exist but are not currently available in the timeline.
+     * This helps detect "invisible" segments - segments that exist in metadata but
+     * are not loaded on any Historical (e.g., during rolling restarts without replication).
+     *
+     * @param timeline the current timeline from the Broker's view
+     * @param queryId for logging
+     * @param traceQuery whether to log detailed trace information
+     * @return the number of segments missing from timeline that exist in metadata, or -1 if check failed
+     */
+    private int compareTimelineWithMetadata(
+        TimelineLookup<String, ServerSelector> timeline,
+        String queryId,
+        boolean traceQuery
+    )
+    {
+      if (coordinatorClient == null) {
+        if (traceQuery) {
+          log.info("[TRACE] Query [%s] Coordinator client not available, skipping metadata comparison", queryId);
+        }
+        return -1;
+      }
+
+      try {
+        String dataSourceName = dataSourceAnalysis.getBaseDataSource()
+            .getTableNames()
+            .stream()
+            .findFirst()
+            .orElse(null);
+        
+        if (dataSourceName == null) {
+          return -1;
+        }
+
+        // Fetch used segments from Coordinator for the query intervals
+        List<Interval> intervalList = new ArrayList<>();
+        for (Interval interval : intervals) {
+          intervalList.add(interval);
+        }
+
+        java.util.concurrent.Future<List<DataSegment>> future = 
+            coordinatorClient.fetchUsedSegments(dataSourceName, intervalList);
+        
+        // Wait with a short timeout to avoid blocking query execution for too long
+        List<DataSegment> metadataSegments;
+        try {
+          metadataSegments = future.get(5, java.util.concurrent.TimeUnit.SECONDS);
+        }
+        catch (java.util.concurrent.TimeoutException e) {
+          log.warn("[TRACE] Query [%s] Coordinator metadata fetch timed out", queryId);
+          return -1;
+        }
+
+        // Get segments from timeline
+        Set<String> timelineSegmentIds = new HashSet<>();
+        List<TimelineObjectHolder<String, ServerSelector>> holders = timeline.lookup(Intervals.ETERNITY);
+        for (TimelineObjectHolder<String, ServerSelector> holder : holders) {
+          for (PartitionChunk<ServerSelector> chunk : holder.getObject()) {
+            timelineSegmentIds.add(chunk.getObject().getSegment().getId().toString());
+          }
+        }
+
+        // Compare metadata segments against timeline
+        Set<String> metadataSegmentIds = new HashSet<>();
+        for (DataSegment segment : metadataSegments) {
+          metadataSegmentIds.add(segment.getId().toString());
+        }
+
+        // Find segments in metadata but not in timeline
+        Set<String> missingFromTimeline = new HashSet<>(metadataSegmentIds);
+        missingFromTimeline.removeAll(timelineSegmentIds);
+
+        if (traceQuery) {
+          log.info(
+              "[TRACE] Query [%s] Metadata comparison: metadata=%d segments, timeline=%d segments, "
+              + "missing from timeline=%d",
+              queryId,
+              metadataSegmentIds.size(),
+              timelineSegmentIds.size(),
+              missingFromTimeline.size()
+          );
+          if (!missingFromTimeline.isEmpty()) {
+            log.info(
+                "[TRACE] Query [%s] Segments in metadata but NOT in timeline (unavailable): %s",
+                queryId,
+                missingFromTimeline
+            );
+          }
+        }
+
+        // If segments are missing and requireFullCoverage is set, throw exception
+        if (!missingFromTimeline.isEmpty() && minCoveragePercent >= 100.0f) {
+          throw new IncompleteCoverageException(
+              dataSourceName,
+              metadataSegmentIds.size(),
+              timelineSegmentIds.size(),
+              minCoveragePercent,
+              missingFromTimeline
+          );
+        }
+
+        return missingFromTimeline.size();
+      }
+      catch (IncompleteCoverageException e) {
+        throw e;  // Re-throw our own exception
+      }
+      catch (Exception e) {
+        log.warn(e, "[TRACE] Query [%s] Failed to compare timeline with metadata", queryId);
+        return -1;
+      }
+    }
+
     private List<Pair<Interval, byte[]>> pruneSegmentsWithCachedResults(
         final byte[] queryCacheKey,
         final Set<SegmentServerSelector> segments
@@ -888,6 +1077,18 @@ public class CachingClusteredClient implements QuerySegmentWalker
             @Override
             public void after(boolean isDone, Throwable thrown) throws Exception
             {
+              final boolean traceQuery = query.context().isTraceQuery();
+              
+              if (traceQuery) {
+                log.info(
+                    "[TRACE] Query [%s] server [%s] sequence completed: isDone=%s, thrown=%s",
+                    query.getId(),
+                    serverName,
+                    isDone,
+                    thrown != null ? thrown.getClass().getName() : "null"
+                );
+              }
+
               if (thrown != null) {
                 // Connection failed, timeout, or other error - mark segments as missing
                 log.warn(
@@ -898,6 +1099,16 @@ public class CachingClusteredClient implements QuerySegmentWalker
                     isDone,
                     segmentsOfServer.size(),
                     thrown.getClass().getName()
+                );
+                responseContext.addMissingSegments(segmentsOfServer);
+              } else if (!isDone) {
+                // Sequence ended without completing - likely a clean disconnect
+                log.warn(
+                    "Query [%s] server [%s] sequence ended prematurely (isDone=false, no exception), "
+                    + "marking [%d] segments as missing. This may indicate a graceful shutdown mid-query.",
+                    query.getId(),
+                    serverName,
+                    segmentsOfServer.size()
                 );
                 responseContext.addMissingSegments(segmentsOfServer);
               }

@@ -374,9 +374,19 @@ public class CachingClusteredClient implements QuerySegmentWalker
       }
       
       // Compare timeline against Coordinator metadata to detect "invisible" segments
-      // This check is performed when traceQuery is enabled OR requireFullCoverage is set
-      if (traceQuery || minCoveragePercent >= 100.0f) {
-        compareTimelineWithMetadata(timeline, query.getId(), traceQuery);
+      // This is an OPTIONAL diagnostic check - only runs when explicitly tracing
+      // We don't run this for requireFullCoverage because:
+      // 1. fetchServerViewSegments is a blocking synchronous call that can slow down queries
+      // 2. For new datasources, the Coordinator view may lag behind the Broker view
+      // 3. The timeline-based coverage check (computeAndValidateSegmentCoverage) is sufficient
+      if (traceQuery) {
+        try {
+          compareTimelineWithMetadata(timeline, query.getId(), traceQuery);
+        }
+        catch (Exception e) {
+          // Never let the diagnostic check break query execution
+          log.warn(e, "[TRACE] Query [%s] Coordinator comparison failed (non-fatal)", query.getId());
+        }
       }
       
       if (uncoveredIntervalsLimit > 0) {
@@ -789,17 +799,31 @@ public class CachingClusteredClient implements QuerySegmentWalker
           return -1;
         }
 
-        // Fetch what segments the Coordinator's server view shows as loaded
-        // This is more accurate than fetchUsedSegments because:
-        // 1. fetchUsedSegments includes overshadowed segments (which timeline correctly excludes)
-        // 2. fetchServerViewSegments shows what's actually loaded on Historicals
+        // Skip comparison for ETERNITY intervals - the Coordinator API doesn't handle them well
+        // and would result in very slow or failing requests
         List<Interval> intervalList = new ArrayList<>();
         for (Interval interval : intervals) {
+          // Skip unbounded intervals (ETERNITY or very large ranges)
+          if (interval.equals(Intervals.ETERNITY) || 
+              interval.toDurationMillis() > 365L * 24 * 60 * 60 * 1000) {  // > 1 year
+            if (traceQuery) {
+              log.info(
+                  "[TRACE] Query [%s] Skipping Coordinator comparison for unbounded/large interval: %s",
+                  queryId,
+                  interval
+              );
+            }
+            return -1;
+          }
           intervalList.add(interval);
         }
 
+        if (intervalList.isEmpty()) {
+          return -1;
+        }
+
         // Use fetchServerViewSegments which returns segments the Coordinator sees as loaded
-        // This matches what the Broker's timeline *should* show
+        // NOTE: This is a BLOCKING synchronous call - only use for tracing/debugging
         Iterable<ImmutableSegmentLoadInfo> serverViewSegments;
         try {
           serverViewSegments = coordinatorClient.fetchServerViewSegments(dataSourceName, intervalList);
@@ -840,10 +864,6 @@ public class CachingClusteredClient implements QuerySegmentWalker
         Set<String> extraInBrokerTimeline = new HashSet<>(timelineSegmentIds);
         extraInBrokerTimeline.removeAll(coordinatorViewSegmentIds);
 
-        // Calculate coverage based on Coordinator's view (source of truth)
-        int totalSegments = coordinatorViewSegmentIds.size();
-        int availableSegments = totalSegments - missingFromBrokerTimeline.size();
-
         if (traceQuery) {
           log.info(
               "[TRACE] Query [%s] Coordinator vs Broker view for intervals %s: "
@@ -882,21 +902,19 @@ public class CachingClusteredClient implements QuerySegmentWalker
           }
         }
 
-        // If segments are missing and requireFullCoverage is set, throw exception
-        if (!missingFromBrokerTimeline.isEmpty() && minCoveragePercent >= 100.0f) {
-          throw new IncompleteCoverageException(
-              dataSourceName,
-              totalSegments,      // Total from Coordinator's server view
-              availableSegments,  // Available in Broker's timeline
-              minCoveragePercent,
-              missingFromBrokerTimeline
+        // This method is purely diagnostic - it doesn't throw exceptions
+        // The actual coverage validation is done by computeAndValidateSegmentCoverage
+        // which uses the Broker's timeline (source of truth for query routing)
+        if (!missingFromBrokerTimeline.isEmpty()) {
+          log.warn(
+              "Query [%s] Coordinator-Broker view mismatch: %d segments in Coordinator view "
+              + "but not in Broker timeline. This may indicate ZK announcement lag or stale Broker view.",
+              queryId,
+              missingFromBrokerTimeline.size()
           );
         }
 
         return missingFromBrokerTimeline.size();
-      }
-      catch (IncompleteCoverageException e) {
-        throw e;  // Re-throw our own exception
       }
       catch (Exception e) {
         log.warn(e, "[TRACE] Query [%s] Failed to compare timeline with metadata", queryId);

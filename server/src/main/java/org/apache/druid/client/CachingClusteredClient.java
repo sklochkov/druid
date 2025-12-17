@@ -807,12 +807,15 @@ public class CachingClusteredClient implements QuerySegmentWalker
           return -1;
         }
 
-        // Get segments from timeline
+        // Get segments from timeline for the SAME intervals used for metadata query
+        // This is critical - we must compare apples to apples
         Set<String> timelineSegmentIds = new HashSet<>();
-        List<TimelineObjectHolder<String, ServerSelector>> holders = timeline.lookup(Intervals.ETERNITY);
-        for (TimelineObjectHolder<String, ServerSelector> holder : holders) {
-          for (PartitionChunk<ServerSelector> chunk : holder.getObject()) {
-            timelineSegmentIds.add(chunk.getObject().getSegment().getId().toString());
+        for (Interval interval : intervalList) {
+          List<TimelineObjectHolder<String, ServerSelector>> holders = timeline.lookup(interval);
+          for (TimelineObjectHolder<String, ServerSelector> holder : holders) {
+            for (PartitionChunk<ServerSelector> chunk : holder.getObject()) {
+              timelineSegmentIds.add(chunk.getObject().getSegment().getId().toString());
+            }
           }
         }
 
@@ -826,11 +829,16 @@ public class CachingClusteredClient implements QuerySegmentWalker
         Set<String> missingFromTimeline = new HashSet<>(metadataSegmentIds);
         missingFromTimeline.removeAll(timelineSegmentIds);
 
+        // Calculate correct coverage: available = total - missing
+        int totalSegments = metadataSegmentIds.size();
+        int availableSegments = totalSegments - missingFromTimeline.size();
+
         if (traceQuery) {
           log.info(
-              "[TRACE] Query [%s] Metadata comparison: metadata=%d segments, timeline=%d segments, "
-              + "missing from timeline=%d",
+              "[TRACE] Query [%s] Metadata comparison for intervals %s: metadata=%d segments, "
+              + "timeline=%d segments (for same intervals), missing from timeline=%d",
               queryId,
+              intervalList,
               metadataSegmentIds.size(),
               timelineSegmentIds.size(),
               missingFromTimeline.size()
@@ -848,8 +856,8 @@ public class CachingClusteredClient implements QuerySegmentWalker
         if (!missingFromTimeline.isEmpty() && minCoveragePercent >= 100.0f) {
           throw new IncompleteCoverageException(
               dataSourceName,
-              metadataSegmentIds.size(),
-              timelineSegmentIds.size(),
+              totalSegments,      // Total expected from metadata
+              availableSegments,  // Available = total - missing
               minCoveragePercent,
               missingFromTimeline
           );

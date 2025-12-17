@@ -45,6 +45,7 @@ import org.apache.druid.guice.annotations.Merging;
 import org.apache.druid.guice.annotations.Smile;
 import org.apache.druid.guice.http.DruidHttpClientConfig;
 import org.apache.druid.client.coordinator.CoordinatorClient;
+import org.apache.druid.client.ImmutableSegmentLoadInfo;
 import org.apache.druid.java.util.common.Intervals;
 import org.apache.druid.java.util.common.Pair;
 import org.apache.druid.java.util.common.StringUtils;
@@ -788,27 +789,37 @@ public class CachingClusteredClient implements QuerySegmentWalker
           return -1;
         }
 
-        // Fetch used segments from Coordinator for the query intervals
+        // Fetch what segments the Coordinator's server view shows as loaded
+        // This is more accurate than fetchUsedSegments because:
+        // 1. fetchUsedSegments includes overshadowed segments (which timeline correctly excludes)
+        // 2. fetchServerViewSegments shows what's actually loaded on Historicals
         List<Interval> intervalList = new ArrayList<>();
         for (Interval interval : intervals) {
           intervalList.add(interval);
         }
 
-        java.util.concurrent.Future<List<DataSegment>> future = 
-            coordinatorClient.fetchUsedSegments(dataSourceName, intervalList);
-        
-        // Wait with a short timeout to avoid blocking query execution for too long
-        List<DataSegment> metadataSegments;
+        // Use fetchServerViewSegments which returns segments the Coordinator sees as loaded
+        // This matches what the Broker's timeline *should* show
+        Iterable<ImmutableSegmentLoadInfo> serverViewSegments;
         try {
-          metadataSegments = future.get(5, java.util.concurrent.TimeUnit.SECONDS);
+          serverViewSegments = coordinatorClient.fetchServerViewSegments(dataSourceName, intervalList);
         }
-        catch (java.util.concurrent.TimeoutException e) {
-          log.warn("[TRACE] Query [%s] Coordinator metadata fetch timed out", queryId);
+        catch (Exception e) {
+          log.warn(e, "[TRACE] Query [%s] Coordinator server view fetch failed", queryId);
           return -1;
         }
 
-        // Get segments from timeline for the SAME intervals used for metadata query
-        // This is critical - we must compare apples to apples
+        // Collect segment IDs from Coordinator's server view
+        Set<String> coordinatorViewSegmentIds = new HashSet<>();
+        Map<String, Integer> coordinatorServerCounts = new HashMap<>();
+        for (ImmutableSegmentLoadInfo loadInfo : serverViewSegments) {
+          String segmentId = loadInfo.getSegment().getId().toString();
+          coordinatorViewSegmentIds.add(segmentId);
+          // Track how many servers have each segment (for replication debugging)
+          coordinatorServerCounts.put(segmentId, loadInfo.getServers().size());
+        }
+
+        // Get segments from timeline for the SAME intervals
         Set<String> timelineSegmentIds = new HashSet<>();
         for (Interval interval : intervalList) {
           List<TimelineObjectHolder<String, ServerSelector>> holders = timeline.lookup(interval);
@@ -819,51 +830,70 @@ public class CachingClusteredClient implements QuerySegmentWalker
           }
         }
 
-        // Compare metadata segments against timeline
-        Set<String> metadataSegmentIds = new HashSet<>();
-        for (DataSegment segment : metadataSegments) {
-          metadataSegmentIds.add(segment.getId().toString());
-        }
+        // Find segments in Coordinator's view but not in Broker's timeline
+        // These are segments the Coordinator thinks are loaded, but the Broker doesn't see
+        Set<String> missingFromBrokerTimeline = new HashSet<>(coordinatorViewSegmentIds);
+        missingFromBrokerTimeline.removeAll(timelineSegmentIds);
 
-        // Find segments in metadata but not in timeline
-        Set<String> missingFromTimeline = new HashSet<>(metadataSegmentIds);
-        missingFromTimeline.removeAll(timelineSegmentIds);
+        // Find segments in Broker's timeline but not in Coordinator's view
+        // These could be realtime segments or stale Broker view
+        Set<String> extraInBrokerTimeline = new HashSet<>(timelineSegmentIds);
+        extraInBrokerTimeline.removeAll(coordinatorViewSegmentIds);
 
-        // Calculate correct coverage: available = total - missing
-        int totalSegments = metadataSegmentIds.size();
-        int availableSegments = totalSegments - missingFromTimeline.size();
+        // Calculate coverage based on Coordinator's view (source of truth)
+        int totalSegments = coordinatorViewSegmentIds.size();
+        int availableSegments = totalSegments - missingFromBrokerTimeline.size();
 
         if (traceQuery) {
           log.info(
-              "[TRACE] Query [%s] Metadata comparison for intervals %s: metadata=%d segments, "
-              + "timeline=%d segments (for same intervals), missing from timeline=%d",
+              "[TRACE] Query [%s] Coordinator vs Broker view for intervals %s: "
+              + "coordinator=%d segments, broker=%d segments, "
+              + "missing from broker=%d, extra in broker=%d",
               queryId,
               intervalList,
-              metadataSegmentIds.size(),
+              coordinatorViewSegmentIds.size(),
               timelineSegmentIds.size(),
-              missingFromTimeline.size()
+              missingFromBrokerTimeline.size(),
+              extraInBrokerTimeline.size()
           );
-          if (!missingFromTimeline.isEmpty()) {
+          if (!missingFromBrokerTimeline.isEmpty()) {
             log.info(
-                "[TRACE] Query [%s] Segments in metadata but NOT in timeline (unavailable): %s",
+                "[TRACE] Query [%s] Segments in Coordinator view but NOT in Broker timeline: %s",
                 queryId,
-                missingFromTimeline
+                missingFromBrokerTimeline
+            );
+            // Log server counts for missing segments (helps debug replication issues)
+            for (String segmentId : missingFromBrokerTimeline) {
+              log.info(
+                  "[TRACE] Query [%s] Missing segment [%s] has %d servers in Coordinator view",
+                  queryId,
+                  segmentId,
+                  coordinatorServerCounts.getOrDefault(segmentId, 0)
+              );
+            }
+          }
+          if (!extraInBrokerTimeline.isEmpty()) {
+            log.info(
+                "[TRACE] Query [%s] Segments in Broker timeline but NOT in Coordinator view "
+                + "(realtime or stale): %s",
+                queryId,
+                extraInBrokerTimeline
             );
           }
         }
 
         // If segments are missing and requireFullCoverage is set, throw exception
-        if (!missingFromTimeline.isEmpty() && minCoveragePercent >= 100.0f) {
+        if (!missingFromBrokerTimeline.isEmpty() && minCoveragePercent >= 100.0f) {
           throw new IncompleteCoverageException(
               dataSourceName,
-              totalSegments,      // Total expected from metadata
-              availableSegments,  // Available = total - missing
+              totalSegments,      // Total from Coordinator's server view
+              availableSegments,  // Available in Broker's timeline
               minCoveragePercent,
-              missingFromTimeline
+              missingFromBrokerTimeline
           );
         }
 
-        return missingFromTimeline.size();
+        return missingFromBrokerTimeline.size();
       }
       catch (IncompleteCoverageException e) {
         throw e;  // Re-throw our own exception

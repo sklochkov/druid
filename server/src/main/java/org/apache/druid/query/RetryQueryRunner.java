@@ -238,11 +238,64 @@ public class RetryQueryRunner<T> implements QueryRunner<T>
         }
         
         if (missingSegments.isEmpty()) {
+          LOG.debug("Query [%s] no missing segments, returning false", queryPlus.getQuery().getId());
           return false;
         } else if (retryCount >= maxNumRetries) {
-          if (!queryContext.allowReturnPartialResults(config.isReturnPartialResults())) {
-            throw new SegmentMissingException("No results found for segments[%s]", missingSegments);
+          final boolean allowPartialFromContext = queryContext.allowReturnPartialResults(config.isReturnPartialResults());
+          final boolean warnMode = queryContext.isWarnOnIncompleteCoverage();
+          
+          // Always log at INFO level for debugging
+          LOG.info(
+              "Query [%s] max retries reached. missingSegments=%d, allowReturnPartialResults=%s, "
+              + "config.isReturnPartialResults=%s, requireFullCoverage=%s",
+              queryPlus.getQuery().getId(),
+              missingSegments.size(),
+              allowPartialFromContext,
+              config.isReturnPartialResults(),
+              queryContext.isRequireFullCoverage()
+          );
+          
+          // In warn mode, log comprehensive details about the partial response
+          if (warnMode) {
+            LOG.warn(
+                "[COVERAGE-WARN] Query [%s] PARTIAL-RESPONSE: Query completed with missing segments. "
+                + "This query is returning PARTIAL RESULTS. missingSegments=%d, segments=%s, "
+                + "requireFullCoverage=%s, allowReturnPartialResults=%s, maxRetries=%d, "
+                + "retriesAttempted=%d",
+                queryPlus.getQuery().getId(),
+                missingSegments.size(),
+                missingSegments,
+                queryContext.isRequireFullCoverage(),
+                allowPartialFromContext,
+                maxNumRetries,
+                retryCount
+            );
+          }
+          
+          if (!allowPartialFromContext) {
+            // Check if we're in dry-run mode (server-side config)
+            final boolean dryRunMode = config.isRequireFullCoverageDryRun();
+            
+            if (dryRunMode) {
+              // Dry-run mode: log what WOULD have failed, but don't actually fail
+              LOG.warn(
+                  "[COVERAGE-DRYRUN] Query [%s] WOULD-FAIL: Query would have thrown SegmentMissingException "
+                  + "but dry-run mode is enabled. Returning partial results instead. "
+                  + "missingSegments=%d, segments=%s, requireFullCoverage=%s",
+                  queryPlus.getQuery().getId(),
+                  missingSegments.size(),
+                  missingSegments,
+                  queryContext.isRequireFullCoverage()
+              );
+              return false;
+            } else {
+              LOG.info("Query [%s] throwing SegmentMissingException for segments: %s",
+                  queryPlus.getQuery().getId(), missingSegments);
+              throw new SegmentMissingException("No results found for segments[%s]", missingSegments);
+            }
           } else {
+            LOG.info("Query [%s] allowing partial results despite %d missing segments",
+                queryPlus.getQuery().getId(), missingSegments.size());
             return false;
           }
         } else {

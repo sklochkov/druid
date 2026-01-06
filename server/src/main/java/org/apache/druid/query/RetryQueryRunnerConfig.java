@@ -26,6 +26,21 @@ public class RetryQueryRunnerConfig
   @JsonProperty
   private int numTries = 1;
 
+  /**
+   * When true, requireFullCoverage operates in "dry-run" mode:
+   * - Logs what would have failed at WARN level with [COVERAGE-DRYRUN] prefix
+   * - Does NOT actually fail the query
+   * - Allows gathering data about coverage issues without impacting availability
+   * 
+   * This is a SERVER-SIDE setting that affects all queries with requireFullCoverage=true.
+   * No client-side changes are required to enable/disable this mode.
+   * 
+   * Default is TRUE (dry-run enabled) to safely gather data before enforcing failures.
+   * Set to false to enable actual query failures: druid.broker.retryPolicy.requireFullCoverageDryRun=false
+   */
+  @JsonProperty
+  private boolean requireFullCoverageDryRun = true;
+
   public int getNumTries()
   {
     return numTries;
@@ -35,5 +50,14 @@ public class RetryQueryRunnerConfig
   public boolean isReturnPartialResults()
   {
     return false;
+  }
+
+  /**
+   * Returns true if requireFullCoverage should operate in dry-run mode,
+   * logging what would have failed without actually failing queries.
+   */
+  public boolean isRequireFullCoverageDryRun()
+  {
+    return requireFullCoverageDryRun;
   }
 }

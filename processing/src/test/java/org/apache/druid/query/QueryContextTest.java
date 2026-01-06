@@ -640,4 +640,53 @@ public class QueryContextTest
     assertFalse(context.allowReturnPartialResults(true));
     assertFalse(context.allowReturnPartialResults(false));
   }
+
+  // Tests for warnOnIncompleteCoverage parameter
+
+  @Test
+  public void testWarnOnIncompleteCoverageDefault()
+  {
+    QueryContext context = QueryContext.of(ImmutableMap.of());
+    assertFalse(context.isWarnOnIncompleteCoverage());
+  }
+
+  @Test
+  public void testWarnOnIncompleteCoverageTrue()
+  {
+    QueryContext context = QueryContext.of(ImmutableMap.of(
+        QueryContexts.WARN_ON_INCOMPLETE_COVERAGE_KEY, true
+    ));
+    assertTrue(context.isWarnOnIncompleteCoverage());
+  }
+
+  @Test
+  public void testWarnOnIncompleteCoverageStringTrue()
+  {
+    QueryContext context = QueryContext.of(ImmutableMap.of(
+        QueryContexts.WARN_ON_INCOMPLETE_COVERAGE_KEY, "true"
+    ));
+    assertTrue(context.isWarnOnIncompleteCoverage());
+  }
+
+  @Test
+  public void testWarnOnIncompleteCoverageFalse()
+  {
+    QueryContext context = QueryContext.of(ImmutableMap.of(
+        QueryContexts.WARN_ON_INCOMPLETE_COVERAGE_KEY, false
+    ));
+    assertFalse(context.isWarnOnIncompleteCoverage());
+  }
+
+  @Test
+  public void testWarnOnIncompleteCoverageIndependentOfRequireFullCoverage()
+  {
+    // warnOnIncompleteCoverage can be enabled independently of requireFullCoverage
+    // This allows logging without failing queries
+    QueryContext context = QueryContext.of(ImmutableMap.of(
+        QueryContexts.WARN_ON_INCOMPLETE_COVERAGE_KEY, true,
+        QueryContexts.REQUIRE_FULL_COVERAGE_KEY, false
+    ));
+    assertTrue(context.isWarnOnIncompleteCoverage());
+    assertFalse(context.isRequireFullCoverage());
+  }
 }

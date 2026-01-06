@@ -48,8 +48,26 @@ public class ReportTimelineMissingSegmentQueryRunner<T> implements QueryRunner<T
   @Override
   public Sequence<T> run(QueryPlus<T> queryPlus, ResponseContext responseContext)
   {
-    // Log at INFO level to help diagnose incomplete coverage issues
-    LOG.info("Reporting missing segments[%s] for query[%s]", descriptors, queryPlus.getQuery().getId());
+    final Query<T> query = queryPlus.getQuery();
+    final boolean warnMode = query.context().isWarnOnIncompleteCoverage();
+    
+    if (warnMode) {
+      // Detailed logging in warn mode to help identify all edge cases
+      LOG.warn(
+          "[COVERAGE-WARN] Query [%s] HISTORICAL-MISSING: Segment(s) not found in Historical's local timeline. "
+          + "This Historical was asked for segments it doesn't have. count=%d, segments=%s, "
+          + "datasource=%s, intervals=%s",
+          query.getId(),
+          descriptors.size(),
+          descriptors,
+          query.getDataSource(),
+          query.getIntervals()
+      );
+    } else {
+      // Standard INFO level logging
+      LOG.info("Reporting missing segments[%s] for query[%s]", descriptors, query.getId());
+    }
+    
     responseContext.addMissingSegments(descriptors);
     return Sequences.empty();
   }

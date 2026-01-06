@@ -566,6 +566,22 @@ public class QueryContext
   }
 
   /**
+   * Returns true if the query should log WARN-level details about any incomplete coverage
+   * without failing the query. This is useful for production debugging to identify
+   * all edge cases where partial results would be returned.
+   * 
+   * When enabled, logs detailed information including:
+   * - Missing segment IDs and their expected locations
+   * - Coverage percentages
+   * - Query intervals and datasource
+   * - Where in the query pipeline the issue was detected
+   */
+  public boolean isWarnOnIncompleteCoverage()
+  {
+    return getBoolean(QueryContexts.WARN_ON_INCOMPLETE_COVERAGE_KEY, QueryContexts.DEFAULT_WARN_ON_INCOMPLETE_COVERAGE);
+  }
+
+  /**
    * Returns the minimum percentage of segments that must be available for the query to proceed.
    * Returns 0.0 by default, meaning no minimum coverage requirement.
    * If {@link #isRequireFullCoverage()} returns true, this value is effectively 100.0.

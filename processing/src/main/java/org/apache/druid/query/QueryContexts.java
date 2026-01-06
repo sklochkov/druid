@@ -93,6 +93,9 @@ public class QueryContexts
   public static final String REQUIRE_FULL_COVERAGE_KEY = "requireFullCoverage";
   // Minimum percentage of segments that must be available (0-100)
   public static final String MIN_COVERAGE_PERCENT_KEY = "minCoveragePercent";
+  // When true, log WARN-level details about any incomplete coverage without failing the query
+  // This is useful for production debugging to identify all edge cases
+  public static final String WARN_ON_INCOMPLETE_COVERAGE_KEY = "warnOnIncompleteCoverage";
   
   // Query tracing - enables verbose INFO logging of query lifecycle
   // Can be set to true, or to a sample rate like "100" (trace every 100th query)
@@ -151,6 +154,7 @@ public class QueryContexts
   public static final boolean DEFAULT_CATALOG_VALIDATION_ENABLED = true;
   public static final boolean DEFAULT_REQUIRE_FULL_COVERAGE = false;
   public static final float DEFAULT_MIN_COVERAGE_PERCENT = 0.0f;
+  public static final boolean DEFAULT_WARN_ON_INCOMPLETE_COVERAGE = false;
 
   @SuppressWarnings("unused") // Used by Jackson serialization
   public enum Vectorize

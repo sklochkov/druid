@@ -73,6 +73,7 @@ import org.apache.druid.query.QuerySegmentWalker;
 import org.apache.druid.query.QueryToolChest;
 import org.apache.druid.query.QueryToolChestWarehouse;
 import org.apache.druid.query.Result;
+import org.apache.druid.query.RetryQueryRunnerConfig;
 import org.apache.druid.query.SegmentDescriptor;
 import org.apache.druid.query.aggregation.MetricManipulatorFns;
 import org.apache.druid.query.context.ResponseContext;
@@ -135,6 +136,7 @@ public class CachingClusteredClient implements QuerySegmentWalker
   private final ServiceEmitter emitter;
   @Nullable
   private final CoordinatorClient coordinatorClient;
+  private final RetryQueryRunnerConfig retryConfig;
 
   @Inject
   public CachingClusteredClient(
@@ -149,7 +151,8 @@ public class CachingClusteredClient implements QuerySegmentWalker
       @Merging ForkJoinPool pool,
       QueryScheduler scheduler,
       ServiceEmitter emitter,
-      @Nullable CoordinatorClient coordinatorClient
+      @Nullable CoordinatorClient coordinatorClient,
+      RetryQueryRunnerConfig retryConfig
   )
   {
     this.warehouse = warehouse;
@@ -164,6 +167,7 @@ public class CachingClusteredClient implements QuerySegmentWalker
     this.scheduler = scheduler;
     this.emitter = emitter;
     this.coordinatorClient = coordinatorClient;
+    this.retryConfig = retryConfig;
 
     if (cacheConfig.isQueryCacheable(Query.GROUP_BY) && (cacheConfig.isUseCache() || cacheConfig.isPopulateCache())) {
       log.warn(
@@ -683,24 +687,63 @@ public class CachingClusteredClient implements QuerySegmentWalker
         }
       }
 
+      // Get datasource name for logging/error messages
+      String dataSourceName = dataSourceAnalysis.getBaseDataSource()
+          .getTableNames()
+          .stream()
+          .findFirst()
+          .orElse("unknown");
+
+      // Warn mode: log details about any incomplete coverage (even if below threshold)
+      final boolean warnMode = query.context().isWarnOnIncompleteCoverage();
+      if (warnMode && totalSegments > 0 && availableSegments < totalSegments) {
+        float actualCoveragePercent = (availableSegments * 100.0f) / totalSegments;
+        log.warn(
+            "[COVERAGE-WARN] Query [%s] PRE-EXECUTION: Incomplete segment coverage detected. "
+            + "datasource=[%s], intervals=%s, totalSegments=%d, availableSegments=%d, "
+            + "coverage=%.1f%%, unavailableSegments=%s",
+            query.getId(),
+            dataSourceName,
+            intervals,
+            totalSegments,
+            availableSegments,
+            actualCoveragePercent,
+            unavailableSegmentIds
+        );
+      }
+
       // Validate coverage if required
       if (minCoveragePercent > 0 && totalSegments > 0) {
         float actualCoveragePercent = (availableSegments * 100.0f) / totalSegments;
         if (actualCoveragePercent < minCoveragePercent) {
-          // Get datasource name for the error message
-          String dataSourceName = dataSourceAnalysis.getBaseDataSource()
-              .getTableNames()
-              .stream()
-              .findFirst()
-              .orElse("unknown");
-
-          throw new IncompleteCoverageException(
-              dataSourceName,
-              totalSegments,
-              availableSegments,
-              minCoveragePercent,
-              unavailableSegmentIds
-          );
+          // Check if we're in dry-run mode (server-side config)
+          final boolean dryRunMode = retryConfig.isRequireFullCoverageDryRun();
+          
+          if (dryRunMode) {
+            // Dry-run mode: log what WOULD have failed, but don't actually fail
+            log.warn(
+                "[COVERAGE-DRYRUN] Query [%s] WOULD-FAIL-PRE-EXECUTION: Query would have thrown "
+                + "IncompleteCoverageException but dry-run mode is enabled. "
+                + "datasource=[%s], intervals=%s, totalSegments=%d, availableSegments=%d, "
+                + "coverage=%.1f%%, required=%.1f%%, unavailableSegments=%s",
+                query.getId(),
+                dataSourceName,
+                intervals,
+                totalSegments,
+                availableSegments,
+                actualCoveragePercent,
+                minCoveragePercent,
+                unavailableSegmentIds
+            );
+          } else {
+            throw new IncompleteCoverageException(
+                dataSourceName,
+                totalSegments,
+                availableSegments,
+                minCoveragePercent,
+                unavailableSegmentIds
+            );
+          }
         }
       }
     }
@@ -1082,12 +1125,25 @@ public class CachingClusteredClient implements QuerySegmentWalker
         );
       }
 
+      final boolean warnMode = query.context().isWarnOnIncompleteCoverage();
+      
       segmentsByServer.forEach((server, segmentsOfServer) -> {
         final QueryRunner serverRunner = serverView.getQueryRunner(server);
 
         if (serverRunner == null) {
-          log.warn("Query [%s] server [%s] doesn't have a query runner, marking [%d] segments as missing",
-              query.getId(), server.getName(), segmentsOfServer.size());
+          if (warnMode) {
+            log.warn(
+                "[COVERAGE-WARN] Query [%s] NO-QUERY-RUNNER: Server [%s] has no query runner available. "
+                + "Server may have gone offline after timeline lookup. markingMissing=%d segments: %s",
+                query.getId(),
+                server.getName(),
+                segmentsOfServer.size(),
+                segmentsOfServer
+            );
+          } else {
+            log.warn("Query [%s] server [%s] doesn't have a query runner, marking [%d] segments as missing",
+                query.getId(), server.getName(), segmentsOfServer.size());
+          }
           // Mark these segments as missing so RetryQueryRunner can detect and handle them
           responseContext.addMissingSegments(segmentsOfServer);
           return;
@@ -1134,6 +1190,7 @@ public class CachingClusteredClient implements QuerySegmentWalker
             public void after(boolean isDone, Throwable thrown) throws Exception
             {
               final boolean traceQuery = query.context().isTraceQuery();
+              final boolean warnMode = query.context().isWarnOnIncompleteCoverage();
               
               if (traceQuery) {
                 log.info(
@@ -1147,25 +1204,51 @@ public class CachingClusteredClient implements QuerySegmentWalker
 
               if (thrown != null) {
                 // Connection failed, timeout, or other error - mark segments as missing
-                log.warn(
-                    thrown,
-                    "Query [%s] server [%s] failed (isDone=%s), marking [%d] segments as missing: %s",
-                    query.getId(),
-                    serverName,
-                    isDone,
-                    segmentsOfServer.size(),
-                    thrown.getClass().getName()
-                );
+                if (warnMode) {
+                  log.warn(
+                      thrown,
+                      "[COVERAGE-WARN] Query [%s] EXECUTION-FAILURE: Server [%s] threw exception. "
+                      + "exceptionType=%s, message=%s, markingMissing=%d segments: %s",
+                      query.getId(),
+                      serverName,
+                      thrown.getClass().getName(),
+                      thrown.getMessage(),
+                      segmentsOfServer.size(),
+                      segmentsOfServer
+                  );
+                } else {
+                  log.warn(
+                      thrown,
+                      "Query [%s] server [%s] failed (isDone=%s), marking [%d] segments as missing: %s",
+                      query.getId(),
+                      serverName,
+                      isDone,
+                      segmentsOfServer.size(),
+                      thrown.getClass().getName()
+                  );
+                }
                 responseContext.addMissingSegments(segmentsOfServer);
               } else if (!isDone) {
                 // Sequence ended without completing - likely a clean disconnect
-                log.warn(
-                    "Query [%s] server [%s] sequence ended prematurely (isDone=false, no exception), "
-                    + "marking [%d] segments as missing. This may indicate a graceful shutdown mid-query.",
-                    query.getId(),
-                    serverName,
-                    segmentsOfServer.size()
-                );
+                if (warnMode) {
+                  log.warn(
+                      "[COVERAGE-WARN] Query [%s] PREMATURE-COMPLETION: Server [%s] sequence ended "
+                      + "without completing (isDone=false, no exception). This typically indicates "
+                      + "graceful shutdown mid-query. markingMissing=%d segments: %s",
+                      query.getId(),
+                      serverName,
+                      segmentsOfServer.size(),
+                      segmentsOfServer
+                  );
+                } else {
+                  log.warn(
+                      "Query [%s] server [%s] sequence ended prematurely (isDone=false, no exception), "
+                      + "marking [%d] segments as missing. This may indicate a graceful shutdown mid-query.",
+                      query.getId(),
+                      serverName,
+                      segmentsOfServer.size()
+                  );
+                }
                 responseContext.addMissingSegments(segmentsOfServer);
               }
             }

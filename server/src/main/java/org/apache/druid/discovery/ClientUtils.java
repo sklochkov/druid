@@ -132,7 +132,7 @@ public class ClientUtils
       if (i > 0) {
         hex.append(" ");
       }
-      hex.append(String.format("%02X", (int) s.charAt(i)));
+      hex.append(StringUtils.format("%02X", (int) s.charAt(i)));
     }
     return hex.toString();
   }

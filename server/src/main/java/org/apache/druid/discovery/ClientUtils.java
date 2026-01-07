@@ -92,15 +92,31 @@ public class ClientUtils
 
   /**
    * Escapes control characters for logging visibility.
+   * Uses character-by-character replacement to avoid forbidden String.replace() API.
    */
   private static String escapeControlChars(@Nullable String s)
   {
     if (s == null) {
       return "null";
     }
-    return s.replace("\r", "\\r")
-            .replace("\n", "\\n")
-            .replace("\t", "\\t");
+    StringBuilder result = new StringBuilder(s.length() + 10);
+    for (int i = 0; i < s.length(); i++) {
+      char c = s.charAt(i);
+      switch (c) {
+        case '\r':
+          result.append("\\r");
+          break;
+        case '\n':
+          result.append("\\n");
+          break;
+        case '\t':
+          result.append("\\t");
+          break;
+        default:
+          result.append(c);
+      }
+    }
+    return result.toString();
   }
 
   /**

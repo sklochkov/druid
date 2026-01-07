@@ -511,7 +511,7 @@ public class NettyHttpClient extends AbstractHttpClient
               i,
               (int) c,
               sanitized.length(),
-              sanitized.replace("\r", "\\r").replace("\n", "\\n").replace("\t", "\\t")
+              escapeControlCharsForLogging(sanitized)
           );
           sb = new StringBuilder(sanitized.length());
           // Copy everything up to this point
@@ -529,11 +529,40 @@ public class NettyHttpClient extends AbstractHttpClient
     if (!sanitized.equals(urlPath)) {
       log.warn(
           "URL path had leading/trailing whitespace. Original: [%s], Trimmed: [%s]",
-          urlPath.replace("\r", "\\r").replace("\n", "\\n").replace("\t", "\\t"),
+          escapeControlCharsForLogging(urlPath),
           sanitized
       );
     }
 
     return sb != null ? sb.toString() : sanitized;
+  }
+
+  /**
+   * Escapes control characters in a string for safe logging.
+   * Uses character-by-character replacement to avoid forbidden String.replace() API.
+   */
+  private static String escapeControlCharsForLogging(String s)
+  {
+    if (s == null) {
+      return "null";
+    }
+    StringBuilder result = new StringBuilder(s.length() + 10);
+    for (int i = 0; i < s.length(); i++) {
+      char c = s.charAt(i);
+      switch (c) {
+        case '\r':
+          result.append("\\r");
+          break;
+        case '\n':
+          result.append("\\n");
+          break;
+        case '\t':
+          result.append("\\t");
+          break;
+        default:
+          result.append(c);
+      }
+    }
+    return result.toString();
   }
 }

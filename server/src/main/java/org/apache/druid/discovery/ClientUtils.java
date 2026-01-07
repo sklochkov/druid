@@ -21,7 +21,9 @@ package org.apache.druid.discovery;
 
 import com.google.common.collect.Lists;
 import org.apache.druid.java.util.common.StringUtils;
+import org.apache.druid.java.util.common.logger.Logger;
 import org.apache.druid.java.util.http.client.Request;
+import org.apache.druid.server.DruidNode;
 
 import javax.annotation.Nullable;
 import java.net.URL;
@@ -34,6 +36,8 @@ import java.util.concurrent.ThreadLocalRandom;
  */
 public class ClientUtils
 {
+  private static final Logger LOG = new Logger(ClientUtils.class);
+
   @Nullable
   public static String pickOneHost(DruidNodeDiscovery druidNodeDiscovery)
   {
@@ -41,13 +45,80 @@ public class ClientUtils
     List<DiscoveryDruidNode> discoveryDruidNodeList = Lists.newArrayList(iter);
     if (!discoveryDruidNodeList.isEmpty()) {
       DiscoveryDruidNode node = discoveryDruidNodeList.get(ThreadLocalRandom.current().nextInt(discoveryDruidNodeList.size()));
+      DruidNode druidNode = node.getDruidNode();
+      
+      String scheme = druidNode.getServiceScheme();
+      String hostAndPort = druidNode.getHostAndPortToUse();
+      
+      // Check for control characters in the discovered host URL components
+      // This helps diagnose Netty 4.1.129+ URI validation failures
+      if (containsControlCharacters(scheme) || containsControlCharacters(hostAndPort)) {
+        LOG.warn(
+            "Discovered node contains control characters! scheme=[%s] (hex: %s), hostAndPort=[%s] (hex: %s), "
+            + "serviceName=[%s]. This will cause Netty 4.1.129+ URI validation to fail.",
+            escapeControlChars(scheme),
+            toHexString(scheme),
+            escapeControlChars(hostAndPort),
+            toHexString(hostAndPort),
+            druidNode.getServiceName()
+        );
+      }
+      
       return StringUtils.format(
           "%s://%s",
-          node.getDruidNode().getServiceScheme(),
-          node.getDruidNode().getHostAndPortToUse()
+          scheme,
+          hostAndPort
       );
     }
     return null;
+  }
+
+  /**
+   * Checks if a string contains control characters (0x00-0x1F or 0x7F).
+   */
+  private static boolean containsControlCharacters(@Nullable String s)
+  {
+    if (s == null) {
+      return false;
+    }
+    for (int i = 0; i < s.length(); i++) {
+      char c = s.charAt(i);
+      if (c < 0x20 || c == 0x7F) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  /**
+   * Escapes control characters for logging visibility.
+   */
+  private static String escapeControlChars(@Nullable String s)
+  {
+    if (s == null) {
+      return "null";
+    }
+    return s.replace("\r", "\\r")
+            .replace("\n", "\\n")
+            .replace("\t", "\\t");
+  }
+
+  /**
+   * Converts string to hex representation for debugging.
+   */
+  private static String toHexString(@Nullable String s)
+  {
+    if (s == null) {
+      return "null";
+    }
+    StringBuilder hex = new StringBuilder();
+    for (int i = 0; i < s.length(); i++) {
+      if (i > 0) {
+        hex.append(" ");
+      }
+      hex.append(String.format("%02X", (int) s.charAt(i)));
+    }
+    return hex.toString();
   }
 
   public static Request withUrl(Request old, URL url)

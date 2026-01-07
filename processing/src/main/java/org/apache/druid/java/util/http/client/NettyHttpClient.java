@@ -151,7 +151,7 @@ public class NettyHttpClient extends AbstractHttpClient
       // In case we get a channel that never had its readability turned back on.
       channel.config().setAutoRead(true);
     }
-    final String urlFile = StringUtils.nullToEmptyNonDruidDataString(url.getFile());
+    final String urlFile = sanitizeUrlPath(StringUtils.nullToEmptyNonDruidDataString(url.getFile()));
     final DefaultFullHttpRequest httpRequest = new DefaultFullHttpRequest(
         HttpVersion.HTTP_1_1,
         method,
@@ -478,5 +478,62 @@ public class NettyHttpClient extends AbstractHttpClient
   {
     return url.getProtocol() + "://" + url.getHost() + ":"
            + (url.getPort() == -1 ? url.getDefaultPort() : url.getPort());
+  }
+
+  /**
+   * Sanitizes a URL path by removing control characters and trimming whitespace.
+   * This is a defensive measure against stricter URI validation in newer Netty versions
+   * (e.g., Netty 4.1.129+ validates that URIs don't contain control characters).
+   *
+   * @param urlPath the URL path to sanitize
+   * @return sanitized URL path safe for Netty HTTP requests
+   */
+  private String sanitizeUrlPath(String urlPath)
+  {
+    if (urlPath == null || urlPath.isEmpty()) {
+      return urlPath;
+    }
+
+    // Remove leading/trailing whitespace
+    String sanitized = urlPath.trim();
+
+    // Check for and remove control characters (0x00-0x1F and 0x7F) that Netty 4.1.129+ rejects
+    StringBuilder sb = null;
+    for (int i = 0; i < sanitized.length(); i++) {
+      char c = sanitized.charAt(i);
+      if (c < 0x20 || c == 0x7F) {
+        // Found a control character - need to sanitize
+        if (sb == null) {
+          // First control char found - log warning and initialize builder
+          log.warn(
+              "URL path contains control character at position %d (char=0x%02X). "
+              + "Original path (length=%d): [%s]. Sanitizing for Netty 4.1.129+ compatibility.",
+              i,
+              (int) c,
+              sanitized.length(),
+              sanitized.replace("\r", "\\r").replace("\n", "\\n").replace("\t", "\\t")
+          );
+          sb = new StringBuilder(sanitized.length());
+          // Copy everything up to this point
+          sb.append(sanitized, 0, i);
+        }
+        // Skip the control character
+      } else {
+        if (sb != null) {
+          sb.append(c);
+        }
+      }
+    }
+
+    // Also check if the path changed due to trim
+    if (!sanitized.equals(urlPath)) {
+      log.warn(
+          "URL path had leading/trailing whitespace. Original: [%s], Trimmed: [%s]",
+          urlPath.replace("\r", "\\r").replace("\n", "\\n").replace("\t", "\\t"),
+          sanitized
+      );
+    }
+
+    return sb != null ? sb.toString() : sanitized;
   }
 }

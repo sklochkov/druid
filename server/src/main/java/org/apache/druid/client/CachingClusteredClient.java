@@ -377,19 +377,18 @@ public class CachingClusteredClient implements QuerySegmentWalker
         logTimelineContents(timeline, query.getId());
       }
       
-      // Compare timeline against Coordinator metadata to detect "invisible" segments
-      // This is an OPTIONAL diagnostic check - only runs when explicitly tracing
-      // We don't run this for requireFullCoverage because:
-      // 1. fetchServerViewSegments is a blocking synchronous call that can slow down queries
-      // 2. For new datasources, the Coordinator view may lag behind the Broker view
-      // 3. The timeline-based coverage check (computeAndValidateSegmentCoverage) is sufficient
-      if (traceQuery) {
+      // Get expected segment count from Coordinator when requireFullCoverage is enabled
+      // This is critical because the Broker's timeline only contains segments from LIVE Historicals.
+      // When a Historical dies, its segments disappear from the timeline entirely, so timeline-only
+      // coverage would be 100% even when half the segments are unavailable.
+      int expectedSegmentCount = -1;
+      if (minCoveragePercent > 0 || traceQuery) {
         try {
-          compareTimelineWithMetadata(timeline, query.getId(), traceQuery);
+          expectedSegmentCount = getExpectedSegmentCountFromCoordinator(timeline, query.getId(), traceQuery || minCoveragePercent > 0);
         }
         catch (Exception e) {
-          // Never let the diagnostic check break query execution
-          log.warn(e, "[TRACE] Query [%s] Coordinator comparison failed (non-fatal)", query.getId());
+          // Log but don't fail - we'll fall back to timeline-only check
+          log.warn(e, "Query [%s] Failed to get expected segment count from Coordinator, using timeline-only check", query.getId());
         }
       }
       
@@ -398,8 +397,8 @@ public class CachingClusteredClient implements QuerySegmentWalker
       }
 
       // Compute segment coverage and validate if minCoveragePercent > 0
-      // This will throw IncompleteCoverageException if coverage is insufficient
-      computeAndValidateSegmentCoverage(timeline, specificSegments);
+      // Uses Coordinator's expected count when available, otherwise falls back to timeline count
+      computeAndValidateSegmentCoverage(timeline, specificSegments, expectedSegmentCount);
 
       final Set<SegmentServerSelector> segmentServers = computeSegmentsToQuery(timeline, specificSegments);
       
@@ -640,15 +639,24 @@ public class CachingClusteredClient implements QuerySegmentWalker
      * @param specificSegments whether to include incomplete partitions
      * @throws IncompleteCoverageException if coverage is below the required minimum percentage
      */
+    /**
+     * Computes segment coverage and validates against the minimum required percentage.
+     *
+     * @param timeline the timeline to check for segment coverage
+     * @param specificSegments whether to include incomplete partitions
+     * @param expectedSegmentCount the expected total segment count from Coordinator (-1 if unavailable)
+     * @throws IncompleteCoverageException if coverage is below the required minimum percentage
+     */
     private void computeAndValidateSegmentCoverage(
         TimelineLookup<String, ServerSelector> timeline,
-        boolean specificSegments
+        boolean specificSegments,
+        int expectedSegmentCount
     )
     {
       final java.util.function.Function<Interval, List<TimelineObjectHolder<String, ServerSelector>>> lookupFn
           = specificSegments ? timeline::lookupWithIncompletePartitions : timeline::lookup;
 
-      int totalSegments = 0;
+      int timelineSegments = 0;
       int availableSegments = 0;
       final Set<String> unavailableSegmentIds = new HashSet<>();
 
@@ -656,7 +664,7 @@ public class CachingClusteredClient implements QuerySegmentWalker
         List<TimelineObjectHolder<String, ServerSelector>> holders = lookupFn.apply(interval);
         for (TimelineObjectHolder<String, ServerSelector> holder : holders) {
           for (PartitionChunk<ServerSelector> chunk : holder.getObject()) {
-            totalSegments++;
+            timelineSegments++;
             ServerSelector serverSelector = chunk.getObject();
             if (!serverSelector.isEmpty()) {
               availableSegments++;
@@ -668,24 +676,16 @@ public class CachingClusteredClient implements QuerySegmentWalker
         }
       }
 
+      // Use Coordinator's expected count if available and greater than timeline count
+      // This handles the case where segments are missing from timeline due to Historical failure
+      // We use max() because:
+      // - If expectedSegmentCount > timelineSegments: Some segments are missing from timeline (Historical down)
+      // - If expectedSegmentCount < timelineSegments: Coordinator may not have caught up with realtime segments
+      // - If expectedSegmentCount == -1: Coordinator unavailable, use timeline count
+      int totalSegments = expectedSegmentCount > timelineSegments ? expectedSegmentCount : timelineSegments;
+      
       // Record coverage in response context (always, for visibility)
       responseContext.putSegmentCoverage(totalSegments, availableSegments);
-
-      // Log coverage info at INFO level when requireFullCoverage is set
-      if (minCoveragePercent > 0) {
-        float actualCoveragePercent = totalSegments > 0 ? (availableSegments * 100.0f) / totalSegments : 0;
-        log.info(
-            "Query [%s] pre-execution coverage check: %d/%d segments available (%.1f%%), required %.1f%%",
-            query.getId(),
-            availableSegments,
-            totalSegments,
-            actualCoveragePercent,
-            minCoveragePercent
-        );
-        if (!unavailableSegmentIds.isEmpty()) {
-          log.info("Query [%s] unavailable segments: %s", query.getId(), unavailableSegmentIds);
-        }
-      }
 
       // Get datasource name for logging/error messages
       String dataSourceName = dataSourceAnalysis.getBaseDataSource()
@@ -694,18 +694,50 @@ public class CachingClusteredClient implements QuerySegmentWalker
           .findFirst()
           .orElse("unknown");
 
+      // Log coverage info at INFO level when requireFullCoverage is set
+      if (minCoveragePercent > 0) {
+        float actualCoveragePercent = totalSegments > 0 ? (availableSegments * 100.0f) / totalSegments : 0;
+        log.info(
+            "Query [%s] pre-execution coverage check: %d/%d segments available (%.1f%%), required %.1f%% "
+            + "[timelineSegments=%d, coordinatorExpected=%d]",
+            query.getId(),
+            availableSegments,
+            totalSegments,
+            actualCoveragePercent,
+            minCoveragePercent,
+            timelineSegments,
+            expectedSegmentCount
+        );
+        if (!unavailableSegmentIds.isEmpty()) {
+          log.info("Query [%s] unavailable segments in timeline: %s", query.getId(), unavailableSegmentIds);
+        }
+        // Log if there's a discrepancy between timeline and expected
+        if (expectedSegmentCount > timelineSegments) {
+          log.warn(
+              "Query [%s] SEGMENT-GAP: Coordinator expects %d segments but timeline only has %d. "
+              + "%d segments are missing (likely due to Historical failure/restart).",
+              query.getId(),
+              expectedSegmentCount,
+              timelineSegments,
+              expectedSegmentCount - timelineSegments
+          );
+        }
+      }
+
       // Warn mode: log details about any incomplete coverage (even if below threshold)
       final boolean warnMode = query.context().isWarnOnIncompleteCoverage();
       if (warnMode && totalSegments > 0 && availableSegments < totalSegments) {
         float actualCoveragePercent = (availableSegments * 100.0f) / totalSegments;
         log.warn(
             "[COVERAGE-WARN] Query [%s] PRE-EXECUTION: Incomplete segment coverage detected. "
-            + "datasource=[%s], intervals=%s, totalSegments=%d, availableSegments=%d, "
-            + "coverage=%.1f%%, unavailableSegments=%s",
+            + "datasource=[%s], intervals=%s, totalSegments=%d (timeline=%d, coordExpected=%d), "
+            + "availableSegments=%d, coverage=%.1f%%, unavailableSegments=%s",
             query.getId(),
             dataSourceName,
             intervals,
             totalSegments,
+            timelineSegments,
+            expectedSegmentCount,
             availableSegments,
             actualCoveragePercent,
             unavailableSegmentIds
@@ -724,12 +756,14 @@ public class CachingClusteredClient implements QuerySegmentWalker
             log.warn(
                 "[COVERAGE-DRYRUN] Query [%s] WOULD-FAIL-PRE-EXECUTION: Query would have thrown "
                 + "IncompleteCoverageException but dry-run mode is enabled. "
-                + "datasource=[%s], intervals=%s, totalSegments=%d, availableSegments=%d, "
-                + "coverage=%.1f%%, required=%.1f%%, unavailableSegments=%s",
+                + "datasource=[%s], intervals=%s, totalSegments=%d (timeline=%d, coordExpected=%d), "
+                + "availableSegments=%d, coverage=%.1f%%, required=%.1f%%, unavailableSegments=%s",
                 query.getId(),
                 dataSourceName,
                 intervals,
                 totalSegments,
+                timelineSegments,
+                expectedSegmentCount,
                 availableSegments,
                 actualCoveragePercent,
                 minCoveragePercent,
@@ -808,25 +842,24 @@ public class CachingClusteredClient implements QuerySegmentWalker
     }
 
     /**
-     * Compares the Broker's timeline against Coordinator metadata to detect segments
-     * that should exist but are not currently available in the timeline.
-     * This helps detect "invisible" segments - segments that exist in metadata but
-     * are not loaded on any Historical (e.g., during rolling restarts without replication).
+     * Gets the expected segment count from the Coordinator for the query intervals.
+     * This is used to detect when segments are missing from the Broker's timeline
+     * due to Historical failures (segments are removed from timeline when Historical dies).
      *
-     * @param timeline the current timeline from the Broker's view
+     * @param timeline the current timeline (used to compare against Coordinator view)
      * @param queryId for logging
-     * @param traceQuery whether to log detailed trace information
-     * @return the number of segments missing from timeline that exist in metadata, or -1 if check failed
+     * @param verbose whether to log detailed information
+     * @return the expected segment count from Coordinator, or -1 if unavailable
      */
-    private int compareTimelineWithMetadata(
+    private int getExpectedSegmentCountFromCoordinator(
         TimelineLookup<String, ServerSelector> timeline,
         String queryId,
-        boolean traceQuery
+        boolean verbose
     )
     {
       if (coordinatorClient == null) {
-        if (traceQuery) {
-          log.info("[TRACE] Query [%s] Coordinator client not available, skipping metadata comparison", queryId);
+        if (verbose) {
+          log.debug("Query [%s] Coordinator client not available, cannot get expected segment count", queryId);
         }
         return -1;
       }
@@ -842,16 +875,16 @@ public class CachingClusteredClient implements QuerySegmentWalker
           return -1;
         }
 
-        // Skip comparison for ETERNITY intervals - the Coordinator API doesn't handle them well
-        // and would result in very slow or failing requests
+        // Build list of intervals to query, skipping unbounded ones
         List<Interval> intervalList = new ArrayList<>();
         for (Interval interval : intervals) {
           // Skip unbounded intervals (ETERNITY or very large ranges)
+          // These would cause slow/failing Coordinator requests
           if (interval.equals(Intervals.ETERNITY) || 
               interval.toDurationMillis() > 365L * 24 * 60 * 60 * 1000) {  // > 1 year
-            if (traceQuery) {
-              log.info(
-                  "[TRACE] Query [%s] Skipping Coordinator comparison for unbounded/large interval: %s",
+            if (verbose) {
+              log.debug(
+                  "Query [%s] Skipping Coordinator expected count for unbounded/large interval: %s",
                   queryId,
                   interval
               );
@@ -865,102 +898,65 @@ public class CachingClusteredClient implements QuerySegmentWalker
           return -1;
         }
 
-        // Use fetchServerViewSegments which returns segments the Coordinator sees as loaded
-        // NOTE: This is a BLOCKING synchronous call - only use for tracing/debugging
+        // Fetch segments from Coordinator's server view
+        // NOTE: This is a synchronous blocking call - acceptable for requireFullCoverage
+        // since users are explicitly trading latency for correctness
         Iterable<ImmutableSegmentLoadInfo> serverViewSegments;
         try {
           serverViewSegments = coordinatorClient.fetchServerViewSegments(dataSourceName, intervalList);
         }
         catch (Exception e) {
-          log.warn(e, "[TRACE] Query [%s] Coordinator server view fetch failed", queryId);
+          log.warn(e, "Query [%s] Failed to fetch expected segments from Coordinator", queryId);
           return -1;
         }
 
-        // Collect segment IDs from Coordinator's server view
-        Set<String> coordinatorViewSegmentIds = new HashSet<>();
-        Map<String, Integer> coordinatorServerCounts = new HashMap<>();
+        // Count segments from Coordinator view
+        int expectedCount = 0;
+        Set<String> coordinatorSegmentIds = new HashSet<>();
         for (ImmutableSegmentLoadInfo loadInfo : serverViewSegments) {
-          String segmentId = loadInfo.getSegment().getId().toString();
-          coordinatorViewSegmentIds.add(segmentId);
-          // Track how many servers have each segment (for replication debugging)
-          coordinatorServerCounts.put(segmentId, loadInfo.getServers().size());
+          expectedCount++;
+          coordinatorSegmentIds.add(loadInfo.getSegment().getId().toString());
         }
 
-        // Get segments from timeline for the SAME intervals
-        Set<String> timelineSegmentIds = new HashSet<>();
-        for (Interval interval : intervalList) {
-          List<TimelineObjectHolder<String, ServerSelector>> holders = timeline.lookup(interval);
-          for (TimelineObjectHolder<String, ServerSelector> holder : holders) {
-            for (PartitionChunk<ServerSelector> chunk : holder.getObject()) {
-              timelineSegmentIds.add(chunk.getObject().getSegment().getId().toString());
+        if (verbose) {
+          // Also count timeline segments for comparison logging
+          Set<String> timelineSegmentIds = new HashSet<>();
+          for (Interval interval : intervalList) {
+            List<TimelineObjectHolder<String, ServerSelector>> holders = timeline.lookup(interval);
+            for (TimelineObjectHolder<String, ServerSelector> holder : holders) {
+              for (PartitionChunk<ServerSelector> chunk : holder.getObject()) {
+                timelineSegmentIds.add(chunk.getObject().getSegment().getId().toString());
+              }
             }
           }
-        }
 
-        // Find segments in Coordinator's view but not in Broker's timeline
-        // These are segments the Coordinator thinks are loaded, but the Broker doesn't see
-        Set<String> missingFromBrokerTimeline = new HashSet<>(coordinatorViewSegmentIds);
-        missingFromBrokerTimeline.removeAll(timelineSegmentIds);
+          // Find segments in Coordinator but not in timeline
+          Set<String> missingFromTimeline = new HashSet<>(coordinatorSegmentIds);
+          missingFromTimeline.removeAll(timelineSegmentIds);
 
-        // Find segments in Broker's timeline but not in Coordinator's view
-        // These could be realtime segments or stale Broker view
-        Set<String> extraInBrokerTimeline = new HashSet<>(timelineSegmentIds);
-        extraInBrokerTimeline.removeAll(coordinatorViewSegmentIds);
-
-        if (traceQuery) {
-          log.info(
-              "[TRACE] Query [%s] Coordinator vs Broker view for intervals %s: "
-              + "coordinator=%d segments, broker=%d segments, "
-              + "missing from broker=%d, extra in broker=%d",
-              queryId,
-              intervalList,
-              coordinatorViewSegmentIds.size(),
-              timelineSegmentIds.size(),
-              missingFromBrokerTimeline.size(),
-              extraInBrokerTimeline.size()
-          );
-          if (!missingFromBrokerTimeline.isEmpty()) {
-            log.info(
-                "[TRACE] Query [%s] Segments in Coordinator view but NOT in Broker timeline: %s",
+          if (!missingFromTimeline.isEmpty()) {
+            log.warn(
+                "Query [%s] SEGMENT-DISCREPANCY: Coordinator has %d segments, timeline has %d. "
+                + "Missing from timeline: %s",
                 queryId,
-                missingFromBrokerTimeline
+                expectedCount,
+                timelineSegmentIds.size(),
+                missingFromTimeline
             );
-            // Log server counts for missing segments (helps debug replication issues)
-            for (String segmentId : missingFromBrokerTimeline) {
-              log.info(
-                  "[TRACE] Query [%s] Missing segment [%s] has %d servers in Coordinator view",
-                  queryId,
-                  segmentId,
-                  coordinatorServerCounts.getOrDefault(segmentId, 0)
-              );
-            }
-          }
-          if (!extraInBrokerTimeline.isEmpty()) {
-            log.info(
-                "[TRACE] Query [%s] Segments in Broker timeline but NOT in Coordinator view "
-                + "(realtime or stale): %s",
+          } else {
+            log.debug(
+                "Query [%s] Coordinator expected count: %d (matches timeline: %d)",
                 queryId,
-                extraInBrokerTimeline
+                expectedCount,
+                timelineSegmentIds.size()
             );
           }
         }
 
-        // This method is purely diagnostic - it doesn't throw exceptions
-        // The actual coverage validation is done by computeAndValidateSegmentCoverage
-        // which uses the Broker's timeline (source of truth for query routing)
-        if (!missingFromBrokerTimeline.isEmpty()) {
-          log.warn(
-              "Query [%s] Coordinator-Broker view mismatch: %d segments in Coordinator view "
-              + "but not in Broker timeline. This may indicate ZK announcement lag or stale Broker view.",
-              queryId,
-              missingFromBrokerTimeline.size()
-          );
-        }
-
-        return missingFromBrokerTimeline.size();
+        return expectedCount;
       }
       catch (Exception e) {
-        log.warn(e, "[TRACE] Query [%s] Failed to compare timeline with metadata", queryId);
+        log.warn(e, "Query [%s] Error getting expected segment count from Coordinator", queryId);
         return -1;
       }
     }

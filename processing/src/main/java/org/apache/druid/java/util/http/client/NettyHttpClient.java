@@ -151,7 +151,7 @@ public class NettyHttpClient extends AbstractHttpClient
       // In case we get a channel that never had its readability turned back on.
       channel.config().setAutoRead(true);
     }
-    final String urlFile = sanitizeUrlPath(StringUtils.nullToEmptyNonDruidDataString(url.getFile()));
+    final String urlFile = StringUtils.nullToEmptyNonDruidDataString(url.getFile());
     final DefaultFullHttpRequest httpRequest = new DefaultFullHttpRequest(
         HttpVersion.HTTP_1_1,
         method,

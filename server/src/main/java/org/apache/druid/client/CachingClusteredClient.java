@@ -45,7 +45,6 @@ import org.apache.druid.guice.annotations.Merging;
 import org.apache.druid.guice.annotations.Smile;
 import org.apache.druid.guice.http.DruidHttpClientConfig;
 import org.apache.druid.client.coordinator.CoordinatorClient;
-import org.apache.druid.client.ImmutableSegmentLoadInfo;
 import org.apache.druid.java.util.common.Intervals;
 import org.apache.druid.java.util.common.Pair;
 import org.apache.druid.java.util.common.StringUtils;
@@ -858,9 +857,12 @@ public class CachingClusteredClient implements QuerySegmentWalker
     )
     {
       if (coordinatorClient == null) {
-        if (verbose) {
-          log.debug("Query [%s] Coordinator client not available, cannot get expected segment count", queryId);
-        }
+        // Always log at INFO level when requireFullCoverage is set - this is important to know
+        log.info(
+            "Query [%s] COVERAGE-SKIP: Coordinator client not available, falling back to timeline-only check. "
+            + "This means coverage validation cannot detect segments missing from the cluster.",
+            queryId
+        );
         return -1;
       }
 
@@ -875,48 +877,76 @@ public class CachingClusteredClient implements QuerySegmentWalker
           return -1;
         }
 
-        // Build list of intervals to query, skipping unbounded ones
+        // Build list of intervals to query
+        // For ETERNITY or very large intervals, use a practical bounded range
+        // that covers all real-world data (1970-2100)
         List<Interval> intervalList = new ArrayList<>();
+        final Interval PRACTICAL_ALL_TIME = new Interval(
+            new org.joda.time.DateTime(0L, org.joda.time.DateTimeZone.UTC),  // 1970-01-01
+            new org.joda.time.DateTime(4102444800000L, org.joda.time.DateTimeZone.UTC)  // 2100-01-01
+        );
+        
         for (Interval interval : intervals) {
-          // Skip unbounded intervals (ETERNITY or very large ranges)
-          // These would cause slow/failing Coordinator requests
+          // For unbounded intervals (ETERNITY or very large ranges), use practical bounds
           if (interval.equals(Intervals.ETERNITY) || 
-              interval.toDurationMillis() > 365L * 24 * 60 * 60 * 1000) {  // > 1 year
+              interval.toDurationMillis() > 365L * 24 * 60 * 60 * 1000 * 50) {  // > 50 years
             if (verbose) {
               log.debug(
-                  "Query [%s] Skipping Coordinator expected count for unbounded/large interval: %s",
+                  "Query [%s] Using practical bounds for large interval: %s -> %s",
                   queryId,
-                  interval
+                  interval,
+                  PRACTICAL_ALL_TIME
               );
             }
-            return -1;
+            intervalList.add(PRACTICAL_ALL_TIME);
+          } else {
+            intervalList.add(interval);
           }
-          intervalList.add(interval);
         }
 
         if (intervalList.isEmpty()) {
           return -1;
         }
 
-        // Fetch segments from Coordinator's server view
-        // NOTE: This is a synchronous blocking call - acceptable for requireFullCoverage
+        // Fetch segments from Coordinator's METADATA (not server view!)
+        // fetchUsedSegments returns segments that SHOULD exist based on metadata,
+        // not just segments that are currently loaded. This is critical for detecting
+        // missing segments when a Historical is down.
+        // NOTE: This is a blocking call - acceptable for requireFullCoverage
         // since users are explicitly trading latency for correctness
-        Iterable<ImmutableSegmentLoadInfo> serverViewSegments;
+        List<DataSegment> usedSegments;
         try {
-          serverViewSegments = coordinatorClient.fetchServerViewSegments(dataSourceName, intervalList);
+          usedSegments = coordinatorClient.fetchUsedSegments(dataSourceName, intervalList).get(
+              30, java.util.concurrent.TimeUnit.SECONDS
+          );
         }
         catch (Exception e) {
-          log.warn(e, "Query [%s] Failed to fetch expected segments from Coordinator", queryId);
+          log.warn(
+              e,
+              "Query [%s] COVERAGE-SKIP: Failed to fetch expected segments from Coordinator metadata for datasource [%s], "
+              + "intervals=%s. Falling back to timeline-only check.",
+              queryId,
+              dataSourceName,
+              intervalList
+          );
           return -1;
         }
 
-        // Count segments from Coordinator view
-        int expectedCount = 0;
+        // Count segments from Coordinator metadata
+        int expectedCount = usedSegments.size();
         Set<String> coordinatorSegmentIds = new HashSet<>();
-        for (ImmutableSegmentLoadInfo loadInfo : serverViewSegments) {
-          expectedCount++;
-          coordinatorSegmentIds.add(loadInfo.getSegment().getId().toString());
+        for (DataSegment segment : usedSegments) {
+          coordinatorSegmentIds.add(segment.getId().toString());
         }
+
+        // Always log the result at INFO level for requireFullCoverage queries
+        log.info(
+            "Query [%s] Coordinator reports %d segments for datasource [%s], intervals=%s",
+            queryId,
+            expectedCount,
+            dataSourceName,
+            intervalList
+        );
 
         if (verbose) {
           // Also count timeline segments for comparison logging

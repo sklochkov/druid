@@ -49,10 +49,9 @@ public class JettyServerInitUtils
     gzipHandler.setMinGzipSize(0);
     gzipHandler.setIncludedMethods(GZIP_METHODS);
     gzipHandler.setInflateBufferSize(inflateBufferSize);
-    gzipHandler.setCompressionLevel(compressionLevel);
-
-    // We don't actually have any precomputed .gz resources, and checking for them inside jars is expensive.
-    gzipHandler.setCheckGzExists(false);
+    // Note: In Jetty 12, compression level is set via DeflaterPool on the Server.
+    // The compressionLevel parameter is no longer directly configurable on GzipHandler.
+    // setCheckGzExists was also removed in Jetty 12.
     gzipHandler.setHandler(handler);
     return gzipHandler;
   }

@@ -28,7 +28,7 @@ import org.eclipse.jetty.util.component.ContainerLifeCycle;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
 
-public class JettyMonitoringConnectionFactory extends ContainerLifeCycle implements ConnectionFactory
+public class JettyMonitoringConnectionFactory extends ContainerLifeCycle implements ConnectionFactory, Connection.Listener
 {
   private final ConnectionFactory connectionFactory;
   private final AtomicInteger activeConns;
@@ -56,22 +56,20 @@ public class JettyMonitoringConnectionFactory extends ContainerLifeCycle impleme
   public Connection newConnection(Connector connector, EndPoint endPoint)
   {
     final Connection connection = connectionFactory.newConnection(connector, endPoint);
-    connection.addListener(
-        new Connection.Listener()
-        {
-          @Override
-          public void onOpened(Connection connection)
-          {
-            activeConns.incrementAndGet();
-          }
-
-          @Override
-          public void onClosed(Connection connection)
-          {
-            activeConns.decrementAndGet();
-          }
-        }
-    );
+    // In Jetty 12, Connection.Listener is registered via the Connector, not on individual connections.
+    // The listener callbacks (onOpened/onClosed) are invoked by the connector when connections are created.
     return connection;
+  }
+
+  @Override
+  public void onOpened(Connection connection)
+  {
+    activeConns.incrementAndGet();
+  }
+
+  @Override
+  public void onClosed(Connection connection)
+  {
+    activeConns.decrementAndGet();
   }
 }

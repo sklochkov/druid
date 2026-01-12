@@ -63,7 +63,6 @@ import org.eclipse.jetty.server.ForwardedRequestCustomizer;
 import org.eclipse.jetty.server.Handler;
 import org.eclipse.jetty.server.HttpConfiguration;
 import org.eclipse.jetty.server.HttpConnectionFactory;
-import org.eclipse.jetty.server.Request;
 import org.eclipse.jetty.server.SecureRequestCustomizer;
 import org.eclipse.jetty.server.Server;
 import org.eclipse.jetty.server.ServerConnector;
@@ -80,12 +79,7 @@ import javax.net.ssl.SSLEngine;
 import javax.net.ssl.TrustManager;
 import javax.net.ssl.TrustManagerFactory;
 import javax.net.ssl.X509ExtendedTrustManager;
-import javax.servlet.RequestDispatcher;
-import javax.servlet.ServletException;
-import javax.servlet.http.HttpServletRequest;
-import javax.servlet.http.HttpServletResponse;
 import java.io.BufferedReader;
-import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.security.KeyStore;
@@ -463,26 +457,12 @@ public class JettyServerModule extends JerseyServletModule
     );
 
     if (!config.isShowDetailedJettyErrors()) {
-      server.setErrorHandler(new ErrorHandler()
-      {
-        @Override
-        public boolean isShowServlet()
-        {
-          return false;
-        }
-
-        @Override
-        public void handle(
-            String target,
-            Request baseRequest,
-            HttpServletRequest request,
-            HttpServletResponse response
-        ) throws IOException, ServletException
-        {
-          request.setAttribute(RequestDispatcher.ERROR_EXCEPTION, null);
-          super.handle(target, baseRequest, request, response);
-        }
-      });
+      ErrorHandler errorHandler = new ErrorHandler();
+      // In Jetty 12, ErrorHandler only has setShowStacks and setShowMessageInTitle
+      // to control the amount of detail shown in error responses.
+      errorHandler.setShowStacks(false);
+      errorHandler.setShowMessageInTitle(false);
+      server.setErrorHandler(errorHandler);
     }
 
     return server;

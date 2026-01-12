@@ -31,10 +31,10 @@ import org.apache.druid.guice.annotations.Self;
 import org.apache.druid.jackson.JacksonModule;
 import org.apache.druid.java.util.metrics.Monitor;
 import org.apache.druid.server.DruidNode;
+import org.apache.druid.server.initialization.jetty.JettyBindings;
 import org.easymock.EasyMock;
 import org.easymock.EasyMockRunner;
 import org.easymock.Mock;
-import org.eclipse.jetty.server.Handler;
 import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Rule;
@@ -194,18 +194,18 @@ public class AvaticaModuleTest
   }
 
   @Test
-  public void testDruidAvaticaJsonHandlerIsRegisterdWithJerseyModule()
+  public void testDruidAvaticaJsonServletIsRegistered()
   {
-    Set<Handler> handlers =
-        injector.getInstance(Key.get(new TypeLiteral<Set<Handler>>(){}));
-    Assert.assertTrue(handlers.stream().anyMatch(h -> DruidAvaticaJsonHandler.class.equals(h.getClass())));
+    Set<JettyBindings.ServletBindingHolder> servletBindings =
+        injector.getInstance(Key.get(new TypeLiteral<Set<JettyBindings.ServletBindingHolder>>(){}));
+    Assert.assertTrue(servletBindings.stream().anyMatch(h -> DruidAvaticaJsonServlet.class.equals(h.getServletClass())));
   }
 
   @Test
-  public void testDruidAvaticaProtobufHandlerIsRegisterdWithJerseyModule()
+  public void testDruidAvaticaProtobufServletIsRegistered()
   {
-    Set<Handler> handlers =
-            injector.getInstance(Key.get(new TypeLiteral<Set<Handler>>(){}));
-    Assert.assertTrue(handlers.stream().anyMatch(h -> DruidAvaticaProtobufHandler.class.equals(h.getClass())));
+    Set<JettyBindings.ServletBindingHolder> servletBindings =
+            injector.getInstance(Key.get(new TypeLiteral<Set<JettyBindings.ServletBindingHolder>>(){}));
+    Assert.assertTrue(servletBindings.stream().anyMatch(h -> DruidAvaticaProtobufServlet.class.equals(h.getServletClass())));
   }
 }

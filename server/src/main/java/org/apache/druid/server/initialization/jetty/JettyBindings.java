@@ -27,6 +27,7 @@ import org.eclipse.jetty.server.Handler;
 
 import javax.servlet.DispatcherType;
 import javax.servlet.Filter;
+import javax.servlet.http.HttpServlet;
 import java.util.EnumSet;
 import java.util.Map;
 
@@ -58,6 +59,33 @@ public class JettyBindings
     Multibinder.newSetBinder(binder, Handler.class)
                .addBinding()
                .to(handlerClass);
+  }
+
+  /**
+   * Register a servlet to be added to the server's ServletContextHandler.
+   * The servlet will be mapped to its specified path.
+   */
+  public static void addServletBinding(Binder binder, Class<? extends ServletBindingHolder> servletBindingClass)
+  {
+    Multibinder.newSetBinder(binder, ServletBindingHolder.class)
+               .addBinding()
+               .to(servletBindingClass);
+  }
+
+  /**
+   * Holder for servlet bindings that specifies the servlet class and its path mapping.
+   */
+  public interface ServletBindingHolder
+  {
+    /**
+     * The servlet class to instantiate via Guice.
+     */
+    Class<? extends HttpServlet> getServletClass();
+
+    /**
+     * The path spec for this servlet (e.g., "/druid/v2/sql/avatica/*").
+     */
+    String getPathSpec();
   }
 
   public static class QosFilterHolder implements ServletFilterHolder

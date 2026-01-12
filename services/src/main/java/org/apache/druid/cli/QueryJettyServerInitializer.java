@@ -139,6 +139,9 @@ public class QueryJettyServerInitializer implements JettyServerInitializer
 
     JettyServerInitUtils.addExtensionFilters(root, injector);
 
+    // Add any servlets registered via JettyBindings.addServletBinding (e.g., Avatica servlets)
+    JettyServerInitUtils.addServletBindings(root, injector);
+
     // Check that requests were authorized before sending responses
     AuthenticationUtils.addPreResponseAuthorizationCheckFilter(
         root,

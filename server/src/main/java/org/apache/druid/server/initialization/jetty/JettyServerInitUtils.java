@@ -83,6 +83,21 @@ public class JettyServerInitUtils
     addFilters(handler, filters);
   }
 
+  /**
+   * Add any servlets that were registered with {@link JettyBindings#addServletBinding}.
+   */
+  public static void addServletBindings(ServletContextHandler handler, Injector injector)
+  {
+    final Set<JettyBindings.ServletBindingHolder> servletBindings =
+        injector.getInstance(Key.get(new TypeLiteral<Set<JettyBindings.ServletBindingHolder>>() {}));
+    for (JettyBindings.ServletBindingHolder binding : servletBindings) {
+      handler.addServlet(
+          new org.eclipse.jetty.ee8.servlet.ServletHolder(injector.getInstance(binding.getServletClass())),
+          binding.getPathSpec()
+      );
+    }
+  }
+
   public static void addFilters(ServletContextHandler handler, Set<? extends ServletFilterHolder> filterHolders)
   {
     for (ServletFilterHolder servletFilterHolder : filterHolders) {

@@ -130,6 +130,8 @@ public class JettyServerModule extends JerseyServletModule
     // Add empty binding for Handlers so that the injector returns an empty set if none are provided by extensions.
     Multibinder.newSetBinder(binder, Handler.class);
     Multibinder.newSetBinder(binder, JettyBindings.QosFilterHolder.class);
+    // Add empty binding for servlet bindings
+    Multibinder.newSetBinder(binder, JettyBindings.ServletBindingHolder.class);
     Multibinder.newSetBinder(binder, ServletFilterHolder.class)
                .addBinding()
                .to(StandardResponseHeaderFilterHolder.class);

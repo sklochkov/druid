@@ -33,12 +33,12 @@ import org.apache.druid.server.security.AuthConfig;
 import org.apache.druid.server.security.AuthenticationUtils;
 import org.apache.druid.server.security.Authenticator;
 import org.apache.druid.server.security.AuthenticatorMapper;
+import org.eclipse.jetty.ee8.servlet.DefaultServlet;
+import org.eclipse.jetty.ee8.servlet.ServletContextHandler;
+import org.eclipse.jetty.ee8.servlet.ServletHolder;
+import org.eclipse.jetty.server.Handler;
 import org.eclipse.jetty.server.Server;
 import org.eclipse.jetty.server.handler.DefaultHandler;
-import org.eclipse.jetty.server.handler.HandlerList;
-import org.eclipse.jetty.servlet.DefaultServlet;
-import org.eclipse.jetty.servlet.ServletContextHandler;
-import org.eclipse.jetty.servlet.ServletHolder;
 
 import java.util.Collections;
 import java.util.List;
@@ -95,19 +95,28 @@ class MiddleManagerJettyServerInitializer implements JettyServerInitializer
 
     root.addFilter(GuiceFilter.class, "/*", null);
 
-    final HandlerList handlerList = new HandlerList();
-    JettyServerInitUtils.maybeAddHSTSRewriteHandler(serverConfig, handlerList);
+    // Build handler list
+    java.util.List<Handler> handlers = new java.util.ArrayList<>();
+    
+    // Add HSTS rewrite handler if enabled
+    if (serverConfig.isEnableHSTS()) {
+      org.eclipse.jetty.rewrite.handler.RewriteHandler rewriteHandler = new org.eclipse.jetty.rewrite.handler.RewriteHandler();
+      rewriteHandler.addRule(new org.eclipse.jetty.rewrite.handler.HeaderPatternRule("*", "Strict-Transport-Security", "max-age=63072000; includeSubDomains"));
+      handlers.add(rewriteHandler);
+    }
 
-    handlerList.addHandler(JettyServerInitUtils.getJettyRequestLogHandler());
-
-    handlerList.addHandler(JettyServerInitUtils.wrapWithDefaultGzipHandler(
+    handlers.add(JettyServerInitUtils.wrapWithDefaultGzipHandler(
         root,
         serverConfig.getInflateBufferSize(),
         serverConfig.getCompressionLevel()
     ));
 
-    handlerList.addHandler(new DefaultHandler());
+    handlers.add(new DefaultHandler());
 
-    server.setHandler(handlerList);
+    final Handler.Sequence handlerSequence = new Handler.Sequence(handlers);
+    
+    // Set request log on server
+    server.setRequestLog(new org.apache.druid.server.initialization.jetty.JettyRequestLog());
+    server.setHandler(handlerSequence);
   }
 }

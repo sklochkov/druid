@@ -25,15 +25,13 @@ import com.google.inject.TypeLiteral;
 import org.apache.druid.java.util.common.ISE;
 import org.apache.druid.server.initialization.ServerConfig;
 import org.apache.druid.server.security.AllowHttpMethodsResourceFilter;
+import org.eclipse.jetty.ee8.servlet.FilterHolder;
+import org.eclipse.jetty.ee8.servlet.FilterMapping;
+import org.eclipse.jetty.ee8.servlet.ServletContextHandler;
 import org.eclipse.jetty.rewrite.handler.HeaderPatternRule;
 import org.eclipse.jetty.rewrite.handler.RewriteHandler;
 import org.eclipse.jetty.server.Handler;
-import org.eclipse.jetty.server.handler.HandlerList;
-import org.eclipse.jetty.server.handler.RequestLogHandler;
 import org.eclipse.jetty.server.handler.gzip.GzipHandler;
-import org.eclipse.jetty.servlet.FilterHolder;
-import org.eclipse.jetty.servlet.FilterMapping;
-import org.eclipse.jetty.servlet.ServletContextHandler;
 
 import javax.ws.rs.HttpMethod;
 
@@ -109,15 +107,6 @@ public class JettyServerInitUtils
     }
   }
 
-  public static Handler getJettyRequestLogHandler()
-  {
-    // Ref: http://www.eclipse.org/jetty/documentation/9.2.6.v20141205/configuring-jetty-request-logs.html
-    RequestLogHandler requestLogHandler = new RequestLogHandler();
-    requestLogHandler.setRequestLog(new JettyRequestLog());
-
-    return requestLogHandler;
-  }
-
   public static void addAllowHttpMethodsFilter(ServletContextHandler root, List<String> allowedHttpMethods)
   {
     FilterHolder holder = new FilterHolder(new AllowHttpMethodsResourceFilter(allowedHttpMethods));
@@ -135,16 +124,21 @@ public class JettyServerInitUtils
     }
   }
 
-  public static void maybeAddHSTSRewriteHandler(ServerConfig serverConfig, HandlerList handlerList)
+  /**
+   * Creates an HSTS rewrite handler if HSTS is enabled.
+   * @return RewriteHandler with HSTS rule, or null if HSTS is not enabled
+   */
+  public static RewriteHandler createHSTSRewriteHandler(ServerConfig serverConfig)
   {
     if (serverConfig.isEnableHSTS()) {
       RewriteHandler rewriteHandler = new RewriteHandler();
       rewriteHandler.addRule(getHSTSHeaderPattern());
-      handlerList.addHandler(rewriteHandler);
+      return rewriteHandler;
     }
+    return null;
   }
 
-  private static HeaderPatternRule getHSTSHeaderPattern()
+  public static HeaderPatternRule getHSTSHeaderPattern()
   {
     return new HeaderPatternRule("*", "Strict-Transport-Security", "max-age=63072000; includeSubDomains");
   }

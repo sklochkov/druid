@@ -83,17 +83,16 @@ import org.apache.druid.sql.http.SqlQuery;
 import org.easymock.EasyMock;
 import org.eclipse.jetty.client.HttpClient;
 import org.eclipse.jetty.client.HttpResponse;
-import org.eclipse.jetty.client.api.Request;
-import org.eclipse.jetty.client.api.Result;
+import org.eclipse.jetty.client.Request;
+import org.eclipse.jetty.client.Result;
 import org.eclipse.jetty.http.HttpField;
 import org.eclipse.jetty.http.HttpFields;
 import org.eclipse.jetty.server.Handler;
 import org.eclipse.jetty.server.Server;
-import org.eclipse.jetty.server.handler.HandlerList;
-import org.eclipse.jetty.servlet.DefaultServlet;
-import org.eclipse.jetty.servlet.ServletContextHandler;
-import org.eclipse.jetty.servlet.ServletHandler;
-import org.eclipse.jetty.servlet.ServletHolder;
+import org.eclipse.jetty.ee8.servlet.DefaultServlet;
+import org.eclipse.jetty.ee8.servlet.ServletContextHandler;
+import org.eclipse.jetty.ee8.servlet.ServletHandler;
+import org.eclipse.jetty.ee8.servlet.ServletHolder;
 import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
@@ -789,17 +788,14 @@ public class AsyncQueryForwardingServletTest extends BaseJettyTest
       root.addFilter(GuiceFilter.class, "/default/*", null);
       root.addFilter(GuiceFilter.class, "/exception/*", null);
 
-      final HandlerList handlerList = new HandlerList();
-      handlerList.setHandlers(
-          new Handler[]{
-              JettyServerInitUtils.wrapWithDefaultGzipHandler(
-                  root,
-                  ServerConfig.DEFAULT_GZIP_INFLATE_BUFFER_SIZE,
-                  Deflater.DEFAULT_COMPRESSION
-              )
-          }
+      final Handler.Sequence handlerSequence = new Handler.Sequence(
+          JettyServerInitUtils.wrapWithDefaultGzipHandler(
+              root,
+              ServerConfig.DEFAULT_GZIP_INFLATE_BUFFER_SIZE,
+              Deflater.DEFAULT_COMPRESSION
+          )
       );
-      server.setHandler(handlerList);
+      server.setHandler(handlerSequence);
     }
   }
 

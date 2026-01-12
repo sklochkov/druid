@@ -40,14 +40,13 @@ import org.apache.druid.server.security.AuthConfig;
 import org.apache.druid.server.security.AuthenticationUtils;
 import org.apache.druid.server.security.Authenticator;
 import org.apache.druid.server.security.AuthenticatorMapper;
+import org.eclipse.jetty.ee8.servlet.DefaultServlet;
+import org.eclipse.jetty.ee8.servlet.FilterHolder;
+import org.eclipse.jetty.ee8.servlet.ServletContextHandler;
+import org.eclipse.jetty.ee8.servlet.ServletHolder;
 import org.eclipse.jetty.server.Handler;
 import org.eclipse.jetty.server.Server;
-import org.eclipse.jetty.server.handler.HandlerList;
 import org.eclipse.jetty.server.handler.StatisticsHandler;
-import org.eclipse.jetty.servlet.DefaultServlet;
-import org.eclipse.jetty.servlet.FilterHolder;
-import org.eclipse.jetty.servlet.ServletContextHandler;
-import org.eclipse.jetty.servlet.ServletHolder;
 
 import java.util.Collections;
 import java.util.List;
@@ -149,31 +148,37 @@ public class QueryJettyServerInitializer implements JettyServerInitializer
 
     root.addFilter(GuiceFilter.class, "/*", null);
 
-    final HandlerList handlerList = new HandlerList();
-    // Do not change the order of the handlers that have already been added
-    for (Handler handler : server.getHandlers()) {
-      handlerList.addHandler(handler);
+    // Build handler sequence
+    List<Handler> handlers = new java.util.ArrayList<>();
+    
+    // Add any existing handlers from server
+    Handler existingHandler = server.getHandler();
+    if (existingHandler != null) {
+      handlers.add(existingHandler);
     }
-
-    handlerList.addHandler(JettyServerInitUtils.getJettyRequestLogHandler());
 
     // Add all extension handlers
-    for (Handler handler : extensionHandlers) {
-      handlerList.addHandler(handler);
+    handlers.addAll(extensionHandlers);
+
+    // Add HSTS rewrite handler if enabled
+    if (serverConfig.isEnableHSTS()) {
+      org.eclipse.jetty.rewrite.handler.RewriteHandler rewriteHandler = new org.eclipse.jetty.rewrite.handler.RewriteHandler();
+      rewriteHandler.addRule(new org.eclipse.jetty.rewrite.handler.HeaderPatternRule("*", "Strict-Transport-Security", "max-age=63072000; includeSubDomains"));
+      handlers.add(rewriteHandler);
     }
 
-    JettyServerInitUtils.maybeAddHSTSRewriteHandler(serverConfig, handlerList);
-
     // Add Gzip handler at the very end
-    handlerList.addHandler(JettyServerInitUtils.wrapWithDefaultGzipHandler(
+    handlers.add(JettyServerInitUtils.wrapWithDefaultGzipHandler(
         root,
         serverConfig.getInflateBufferSize(),
         serverConfig.getCompressionLevel()
     ));
 
-    final StatisticsHandler statisticsHandler = new StatisticsHandler();
-    statisticsHandler.setHandler(handlerList);
+    final Handler.Sequence handlerSequence = new Handler.Sequence(handlers);
+    final StatisticsHandler statisticsHandler = new StatisticsHandler(handlerSequence);
 
+    // Set request log on server
+    server.setRequestLog(new org.apache.druid.server.initialization.jetty.JettyRequestLog());
     server.setHandler(statisticsHandler);
   }
 }

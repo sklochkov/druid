@@ -24,7 +24,7 @@ import com.google.inject.Inject;
 import org.apache.commons.lang.CharUtils;
 import org.apache.druid.java.util.common.IAE;
 import org.apache.druid.server.initialization.ServerConfig;
-import org.eclipse.jetty.client.api.Response;
+import org.eclipse.jetty.client.Response;
 
 import javax.annotation.Nullable;
 import javax.servlet.DispatcherType;

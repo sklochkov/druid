@@ -134,14 +134,13 @@ import org.apache.druid.server.security.Authenticator;
 import org.apache.druid.server.security.AuthenticatorMapper;
 import org.apache.druid.tasklogs.TaskLogStreamer;
 import org.apache.druid.tasklogs.TaskLogs;
+import org.eclipse.jetty.ee8.servlet.DefaultServlet;
+import org.eclipse.jetty.ee8.servlet.FilterHolder;
+import org.eclipse.jetty.ee8.servlet.ServletContextHandler;
+import org.eclipse.jetty.ee8.servlet.ServletHolder;
 import org.eclipse.jetty.rewrite.handler.RewriteHandler;
 import org.eclipse.jetty.server.Handler;
 import org.eclipse.jetty.server.Server;
-import org.eclipse.jetty.server.handler.HandlerList;
-import org.eclipse.jetty.servlet.DefaultServlet;
-import org.eclipse.jetty.servlet.FilterHolder;
-import org.eclipse.jetty.servlet.ServletContextHandler;
-import org.eclipse.jetty.servlet.ServletHolder;
 
 import java.util.HashMap;
 import java.util.List;
@@ -527,20 +526,18 @@ public class CliOverlord extends ServerRunnable
       RewriteHandler rewriteHandler = WebConsoleJettyServerInitializer.createWebConsoleRewriteHandler();
       JettyServerInitUtils.maybeAddHSTSPatternRule(serverConfig, rewriteHandler);
 
-      HandlerList handlerList = new HandlerList();
-      handlerList.setHandlers(
-          new Handler[]{
-              rewriteHandler,
-              JettyServerInitUtils.getJettyRequestLogHandler(),
-              JettyServerInitUtils.wrapWithDefaultGzipHandler(
-                  root,
-                  serverConfig.getInflateBufferSize(),
-                  serverConfig.getCompressionLevel()
-              )
-          }
+      final Handler.Sequence handlerSequence = new Handler.Sequence(
+          rewriteHandler,
+          JettyServerInitUtils.wrapWithDefaultGzipHandler(
+              root,
+              serverConfig.getInflateBufferSize(),
+              serverConfig.getCompressionLevel()
+          )
       );
 
-      server.setHandler(handlerList);
+      // Set request log on server
+      server.setRequestLog(new org.apache.druid.server.initialization.jetty.JettyRequestLog());
+      server.setHandler(handlerSequence);
     }
   }
 }

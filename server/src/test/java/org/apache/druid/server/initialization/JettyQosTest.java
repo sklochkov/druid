@@ -38,7 +38,7 @@ import com.google.inject.Key;
 import com.google.inject.Module;
 import io.netty.handler.codec.http.HttpMethod;
 import org.eclipse.jetty.server.Server;
-import org.eclipse.jetty.servlets.QoSFilter;
+import org.eclipse.jetty.ee8.servlets.QoSFilter;
 import org.eclipse.jetty.util.thread.QueuedThreadPool;
 import org.junit.Assert;
 import org.junit.Test;

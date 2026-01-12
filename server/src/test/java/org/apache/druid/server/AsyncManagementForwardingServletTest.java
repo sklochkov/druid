@@ -46,11 +46,10 @@ import org.apache.druid.server.security.AuthorizerMapper;
 import org.eclipse.jetty.client.HttpClient;
 import org.eclipse.jetty.server.Handler;
 import org.eclipse.jetty.server.Server;
-import org.eclipse.jetty.server.handler.HandlerList;
-import org.eclipse.jetty.servlet.DefaultServlet;
-import org.eclipse.jetty.servlet.ServletContextHandler;
-import org.eclipse.jetty.servlet.ServletHandler;
-import org.eclipse.jetty.servlet.ServletHolder;
+import org.eclipse.jetty.ee8.servlet.DefaultServlet;
+import org.eclipse.jetty.ee8.servlet.ServletContextHandler;
+import org.eclipse.jetty.ee8.servlet.ServletHandler;
+import org.eclipse.jetty.ee8.servlet.ServletHolder;
 import org.junit.After;
 import org.junit.Assert;
 import org.junit.Before;
@@ -534,14 +533,13 @@ public class AsyncManagementForwardingServletTest extends BaseJettyTest
       AuthenticationUtils.addAuthenticationFilterChain(root, ImmutableList.of(new AllowAllAuthenticator()));
       JettyServerInitUtils.addExtensionFilters(root, injector);
 
-      final HandlerList handlerList = new HandlerList();
-      handlerList.setHandlers(
-          new Handler[]{JettyServerInitUtils.wrapWithDefaultGzipHandler(
+      final Handler.Sequence handlerSequence = new Handler.Sequence(
+          JettyServerInitUtils.wrapWithDefaultGzipHandler(
               root,
               ServerConfig.DEFAULT_GZIP_INFLATE_BUFFER_SIZE,
-              Deflater.DEFAULT_COMPRESSION)}
+              Deflater.DEFAULT_COMPRESSION)
       );
-      server.setHandler(handlerList);
+      server.setHandler(handlerSequence);
     }
   }
 

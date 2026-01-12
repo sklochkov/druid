@@ -57,6 +57,14 @@ public class JettyServerInitUtils
   }
 
   /**
+   * Overload for EE8 ServletContextHandler - gets the core context handler from the EE8 handler.
+   */
+  public static GzipHandler wrapWithDefaultGzipHandler(final ServletContextHandler handler, int inflateBufferSize, int compressionLevel)
+  {
+    return wrapWithDefaultGzipHandler(handler.getCoreContextHandler(), inflateBufferSize, compressionLevel);
+  }
+
+  /**
    * Add any filters that were registered with {@link JettyBindings#addQosFilter}. These must be added first in
    * the filter chain, because when a request is suspended and later resumed due to QoS constraints, its filter
    * chain is restarted. Placing QoSFilters first in the chain avoids double-execution of other filters.

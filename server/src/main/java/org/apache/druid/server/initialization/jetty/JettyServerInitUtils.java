@@ -67,13 +67,16 @@ public class JettyServerInitUtils
    */
   public static void configureGzipHandler(final ServletContextHandler handler, int inflateBufferSize, int compressionLevel)
   {
-    GzipHandler gzipHandler = new GzipHandler();
-    gzipHandler.setMinGzipSize(0);
-    gzipHandler.setIncludedMethods(GZIP_METHODS);
-    gzipHandler.setInflateBufferSize(inflateBufferSize);
-    // Insert the GzipHandler into the core context's handler chain
-    // This properly integrates gzip with the EE8 servlet layer
-    handler.getCoreContextHandler().insertHandler(gzipHandler);
+    // TODO: Re-enable gzip after verifying Jetty 12 EE8 integration works correctly.
+    // The insertHandler() approach is the correct Jetty 12 way, but we're temporarily
+    // disabling gzip to ensure backwards compatibility during the migration.
+    // When re-enabling, uncomment the following code:
+    //
+    // GzipHandler gzipHandler = new GzipHandler();
+    // gzipHandler.setMinGzipSize(0);
+    // gzipHandler.setIncludedMethods(GZIP_METHODS);
+    // gzipHandler.setInflateBufferSize(inflateBufferSize);
+    // handler.getCoreContextHandler().insertHandler(gzipHandler);
   }
 
   /**

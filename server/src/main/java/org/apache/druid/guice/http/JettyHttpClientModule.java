@@ -107,12 +107,11 @@ public class JettyHttpClientModule implements Module
               @Override
               public void start()
               {
-                try {
-                  httpClient.start();
-                }
-                catch (Exception e) {
-                  throw new RuntimeException(e);
-                }
+                // Note: We intentionally don't start the HttpClient here.
+                // Proxy servlets (like OverlordProxyServlet, AsyncQueryForwardingServlet)
+                // need to configure the client before starting it. If we start it here,
+                // their configuration (like setHttpCookieStore) will fail with IllegalStateException.
+                // The servlets will start the client themselves via AbstractProxyServlet.createHttpClient().
               }
 
               @Override

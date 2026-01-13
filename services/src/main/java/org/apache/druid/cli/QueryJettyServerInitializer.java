@@ -151,6 +151,14 @@ public class QueryJettyServerInitializer implements JettyServerInitializer
 
     root.addFilter(GuiceFilter.class, "/*", null);
 
+    // Configure gzip compression on the servlet context handler
+    // This uses insertHandler to properly integrate with the EE8 layer
+    JettyServerInitUtils.configureGzipHandler(
+        root,
+        serverConfig.getInflateBufferSize(),
+        serverConfig.getCompressionLevel()
+    );
+
     // Build handler sequence
     List<Handler> handlers = new java.util.ArrayList<>();
     
@@ -170,12 +178,8 @@ public class QueryJettyServerInitializer implements JettyServerInitializer
       handlers.add(rewriteHandler);
     }
 
-    // Add Gzip handler at the very end
-    handlers.add(JettyServerInitUtils.wrapWithDefaultGzipHandler(
-        root,
-        serverConfig.getInflateBufferSize(),
-        serverConfig.getCompressionLevel()
-    ));
+    // Add the servlet context handler (with gzip already configured via insertHandler)
+    handlers.add(root.getCoreContextHandler());
 
     final Handler.Sequence handlerSequence = new Handler.Sequence(handlers);
     final StatisticsHandler statisticsHandler = new StatisticsHandler(handlerSequence);

@@ -105,11 +105,14 @@ class MiddleManagerJettyServerInitializer implements JettyServerInitializer
       handlers.add(rewriteHandler);
     }
 
-    handlers.add(JettyServerInitUtils.wrapWithDefaultGzipHandler(
+    // Configure gzip compression on the servlet context handler
+    JettyServerInitUtils.configureGzipHandler(
         root,
         serverConfig.getInflateBufferSize(),
         serverConfig.getCompressionLevel()
-    ));
+    );
+
+    handlers.add(root.getCoreContextHandler());
 
     handlers.add(new DefaultHandler());
 

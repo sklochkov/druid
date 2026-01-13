@@ -107,6 +107,12 @@ public class JettyHttpClientModule implements Module
               @Override
               public void start()
               {
+                try {
+                  httpClient.start();
+                }
+                catch (Exception e) {
+                  throw new RuntimeException(e);
+                }
               }
 
               @Override

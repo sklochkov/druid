@@ -146,6 +146,13 @@ public class CliCustomNodeRole extends ServerRunnable
 
       root.addFilter(GuiceFilter.class, "/*", null);
 
+      // Configure gzip compression on the servlet context handler
+      JettyServerInitUtils.configureGzipHandler(
+          root,
+          serverConfig.getInflateBufferSize(),
+          serverConfig.getCompressionLevel()
+      );
+
       // Build handler list
       java.util.List<Handler> handlers = new java.util.ArrayList<>();
       
@@ -155,14 +162,8 @@ public class CliCustomNodeRole extends ServerRunnable
         handlers.add(existingHandler);
       }
 
-      // Add Gzip handler at the very end
-      handlers.add(
-          JettyServerInitUtils.wrapWithDefaultGzipHandler(
-              root,
-              serverConfig.getInflateBufferSize(),
-              serverConfig.getCompressionLevel()
-          )
-      );
+      // Add the servlet context handler (with gzip already configured)
+      handlers.add(root.getCoreContextHandler());
 
       final Handler.Sequence handlerSequence = new Handler.Sequence(handlers);
       final StatisticsHandler statisticsHandler = new StatisticsHandler(handlerSequence);

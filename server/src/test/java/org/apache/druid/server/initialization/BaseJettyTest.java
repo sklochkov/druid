@@ -153,13 +153,14 @@ public abstract class BaseJettyTest
       JettyServerInitUtils.addExtensionFilters(root, injector);
       root.addFilter(GuiceFilter.class, "/*", null);
 
-      final Handler.Sequence handlerSequence = new Handler.Sequence(
-          JettyServerInitUtils.wrapWithDefaultGzipHandler(
-              root,
-              ServerConfig.DEFAULT_GZIP_INFLATE_BUFFER_SIZE,
-              Deflater.DEFAULT_COMPRESSION
-          )
+      // Configure gzip compression on the servlet context handler
+      JettyServerInitUtils.configureGzipHandler(
+          root,
+          ServerConfig.DEFAULT_GZIP_INFLATE_BUFFER_SIZE,
+          Deflater.DEFAULT_COMPRESSION
       );
+
+      final Handler.Sequence handlerSequence = new Handler.Sequence(root.getCoreContextHandler());
       server.setHandler(handlerSequence);
     }
 

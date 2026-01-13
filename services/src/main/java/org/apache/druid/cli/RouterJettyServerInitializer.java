@@ -149,13 +149,16 @@ public class RouterJettyServerInitializer implements JettyServerInitializer
     RewriteHandler rewriteHandler = WebConsoleJettyServerInitializer.createWebConsoleRewriteHandler();
     JettyServerInitUtils.maybeAddHSTSPatternRule(serverConfig, rewriteHandler);
 
+    // Configure gzip compression on the servlet context handler
+    JettyServerInitUtils.configureGzipHandler(
+        root,
+        serverConfig.getInflateBufferSize(),
+        serverConfig.getCompressionLevel()
+    );
+
     final Handler.Sequence handlerSequence = new Handler.Sequence(
         rewriteHandler,
-        JettyServerInitUtils.wrapWithDefaultGzipHandler(
-            root,
-            serverConfig.getInflateBufferSize(),
-            serverConfig.getCompressionLevel()
-        )
+        root.getCoreContextHandler()
     );
     
     // Set request log on server

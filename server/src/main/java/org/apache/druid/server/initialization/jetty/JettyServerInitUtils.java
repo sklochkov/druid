@@ -57,8 +57,30 @@ public class JettyServerInitUtils
   }
 
   /**
-   * Overload for EE8 ServletContextHandler - gets the core context handler from the EE8 handler.
+   * Configure gzip compression for an EE8 ServletContextHandler.
+   * In Jetty 12 EE8, we use insertHandler to insert the GzipHandler into the handler chain
+   * of the core context, which properly integrates with the servlet layer.
+   * 
+   * @param handler the EE8 ServletContextHandler to configure
+   * @param inflateBufferSize size of the inflate buffer
+   * @param compressionLevel compression level (note: not used in Jetty 12, kept for API compatibility)
    */
+  public static void configureGzipHandler(final ServletContextHandler handler, int inflateBufferSize, int compressionLevel)
+  {
+    GzipHandler gzipHandler = new GzipHandler();
+    gzipHandler.setMinGzipSize(0);
+    gzipHandler.setIncludedMethods(GZIP_METHODS);
+    gzipHandler.setInflateBufferSize(inflateBufferSize);
+    // Insert the GzipHandler into the core context's handler chain
+    // This properly integrates gzip with the EE8 servlet layer
+    handler.getCoreContextHandler().insertHandler(gzipHandler);
+  }
+
+  /**
+   * Overload for EE8 ServletContextHandler - gets the core context handler from the EE8 handler.
+   * @deprecated Use {@link #configureGzipHandler(ServletContextHandler, int, int)} for proper EE8 integration
+   */
+  @Deprecated
   public static GzipHandler wrapWithDefaultGzipHandler(final ServletContextHandler handler, int inflateBufferSize, int compressionLevel)
   {
     return wrapWithDefaultGzipHandler(handler.getCoreContextHandler(), inflateBufferSize, compressionLevel);

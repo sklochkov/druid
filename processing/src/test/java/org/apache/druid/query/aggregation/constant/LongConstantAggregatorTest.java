@@ -19,10 +19,11 @@
 
 package org.apache.druid.query.aggregation.constant;
 
-import org.apache.commons.lang.math.RandomUtils;
 import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
+
+import java.util.concurrent.ThreadLocalRandom;
 
 public class LongConstantAggregatorTest
 {
@@ -32,7 +33,7 @@ public class LongConstantAggregatorTest
   @Before
   public void setup()
   {
-    randomVal = RandomUtils.nextLong();
+    randomVal = ThreadLocalRandom.current().nextLong();
     aggregator = new LongConstantAggregator(randomVal);
   }
 

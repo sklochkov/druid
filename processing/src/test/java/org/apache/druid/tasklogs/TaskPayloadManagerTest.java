@@ -19,7 +19,6 @@
 
 package org.apache.druid.tasklogs;
 
-import org.apache.commons.lang.NotImplementedException;
 import org.junit.Assert;
 import org.junit.Test;
 
@@ -28,7 +27,7 @@ public class TaskPayloadManagerTest implements TaskPayloadManager
   @Test
   public void test_streamTaskPayload()
   {
-    Assert.assertThrows(NotImplementedException.class,
+    Assert.assertThrows(UnsupportedOperationException.class,
         () -> this.streamTaskPayload("id")
     );
   }
@@ -36,7 +35,7 @@ public class TaskPayloadManagerTest implements TaskPayloadManager
   @Test
   public void test_pushTaskPayload()
   {
-    Assert.assertThrows(NotImplementedException.class,
+    Assert.assertThrows(UnsupportedOperationException.class,
         () -> this.pushTaskPayload("id", null)
     );
   }

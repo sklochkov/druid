@@ -20,7 +20,6 @@
 package org.apache.druid.tasklogs;
 
 import com.google.common.base.Optional;
-import org.apache.commons.lang.NotImplementedException;
 import org.apache.druid.guice.annotations.ExtensionPoint;
 import org.apache.druid.java.util.common.StringUtils;
 
@@ -42,7 +41,7 @@ public interface TaskPayloadManager
    */
   default void pushTaskPayload(String taskid, File taskPayloadFile) throws IOException
   {
-    throw new NotImplementedException(StringUtils.format("this druid.indexer.logs.type [%s] does not support managing task payloads yet. You will have to switch to using environment variables", getClass()));
+    throw new UnsupportedOperationException(StringUtils.format("this druid.indexer.logs.type [%s] does not support managing task payloads yet. You will have to switch to using environment variables", getClass()));
   }
 
   /**
@@ -52,6 +51,6 @@ public interface TaskPayloadManager
    */
   default Optional<InputStream> streamTaskPayload(String taskid) throws IOException
   {
-    throw new NotImplementedException(StringUtils.format("this druid.indexer.logs.type [%s] does not support managing task payloads yet. You will have to switch to using environment variables", getClass()));
+    throw new UnsupportedOperationException(StringUtils.format("this druid.indexer.logs.type [%s] does not support managing task payloads yet. You will have to switch to using environment variables", getClass()));
   }
 }

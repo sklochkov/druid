@@ -19,12 +19,12 @@
 
 package org.apache.druid.query.aggregation.constant;
 
-import org.apache.commons.lang.math.RandomUtils;
 import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
 
 import java.nio.ByteBuffer;
+import java.util.concurrent.ThreadLocalRandom;
 
 public class LongConstantBufferAggregatorTest
 {
@@ -35,7 +35,7 @@ public class LongConstantBufferAggregatorTest
   @Before
   public void setup()
   {
-    randomVal = RandomUtils.nextLong();
+    randomVal = ThreadLocalRandom.current().nextLong();
     aggregator = new LongConstantBufferAggregator(randomVal);
     // mark byteBuffer null to verify no methods ever get called on it.
     byteBuffer = null;

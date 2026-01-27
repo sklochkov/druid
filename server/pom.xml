@@ -240,6 +240,12 @@
         <dependency>
             <groupId>org.skife.config</groupId>
             <artifactId>config-magic</artifactId>
+            <exclusions>
+                <exclusion>
+                    <groupId>commons-lang</groupId>
+                    <artifactId>commons-lang</artifactId>
+                </exclusion>
+            </exclusions>
         </dependency>
         <dependency>
             <groupId>org.apache.curator</groupId>

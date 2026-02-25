@@ -749,4 +749,22 @@
     ]]></notes>
     <vulnerabilityName>CVE-2024-45772</vulnerabilityName>
   </suppress>
+
+  <suppress>
+    <!--
+      CVE-2026-23906: Timing side-channel in basic-security extension allowing
+      username enumeration and hash comparison oracle.
+      Fixed by backporting constant-time validation from Druid 36.0.0:
+        - Dummy hash computation for non-existent users (timing-safe)
+        - MessageDigest.isEqual() for constant-time hash comparison
+        - Uniform error responses to prevent user enumeration
+      See: MetadataStoreCredentialsValidator.java, LdapUserPrincipal.java,
+           BasicHTTPAuthenticator.java
+    -->
+    <notes><![CDATA[
+    file name: druid-basic-security-31.0.2.jar
+    ]]></notes>
+    <packageUrl regex="true">^pkg:maven/org\.apache\.druid\.extensions/druid\-basic\-security@.*$</packageUrl>
+    <cve>CVE-2026-23906</cve>
+  </suppress>
 </suppressions>

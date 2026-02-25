@@ -223,13 +223,15 @@ public class BasicHTTPAuthenticator implements Authenticator
             LOG.info("Skipping failed authenticator %s ", name);
             filterChain.doFilter(servletRequest, servletResponse);
           } else {
+            // Use sendError without message to prevent user enumeration (CVE-2026-23906)
             httpResp.sendError(HttpServletResponse.SC_UNAUTHORIZED);
           }
         }
       }
       catch (BasicSecurityAuthenticationException ex) {
-        LOG.info("Exception authenticating user %s - %s", user, ex.getMessage());
-        httpResp.sendError(HttpServletResponse.SC_UNAUTHORIZED, "User authentication failed.");
+        LOG.debug("Authentication failed for user [%s]", user);
+        // Use sendError without message to prevent user enumeration (CVE-2026-23906)
+        httpResp.sendError(HttpServletResponse.SC_UNAUTHORIZED);
       }
     }
 

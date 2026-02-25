@@ -1,0 +1,4 @@
+# CVE-2026-23906: Timing side-channel in basic-security extension.
+# Fixed by backporting constant-time validation from Druid 36.0.0.
+# See: openvex.json and owasp-dependency-check-suppressions.xml for details.
+CVE-2026-23906

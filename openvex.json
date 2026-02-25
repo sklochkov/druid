@@ -1,0 +1,32 @@
+{
+  "@context": "https://openvex.dev/ns/v0.2.0",
+  "@id": "https://druid.apache.org/vex/CVE-2026-23906-backport",
+  "author": "Apache Druid Security Team",
+  "timestamp": "2026-02-25T00:00:00Z",
+  "version": 1,
+  "statements": [
+    {
+      "vulnerability": {
+        "@id": "https://nvd.nist.gov/vuln/detail/CVE-2026-23906",
+        "name": "CVE-2026-23906",
+        "description": "Timing side-channel in Apache Druid basic-security extension allows username enumeration and hash comparison oracle."
+      },
+      "products": [
+        {
+          "@id": "pkg:maven/org.apache.druid.extensions/druid-basic-security@31.0.2",
+          "identifiers": {
+            "purl": "pkg:maven/org.apache.druid.extensions/druid-basic-security@31.0.2"
+          }
+        },
+        {
+          "@id": "pkg:maven/org.apache.druid/druid@31.0.2",
+          "identifiers": {
+            "purl": "pkg:maven/org.apache.druid/druid@31.0.2"
+          }
+        }
+      ],
+      "status": "fixed",
+      "justification": "The fix from Apache Druid 36.0.0 has been backported to this build. Changes include: (1) dummy hash computation for non-existent users to prevent timing-based username enumeration, (2) MessageDigest.isEqual() for constant-time hash comparison to prevent hash oracle attacks, (3) uniform HTTP error responses without message bodies to prevent user enumeration via response content. Affected files: MetadataStoreCredentialsValidator.java, LdapUserPrincipal.java, BasicHTTPAuthenticator.java."
+    }
+  ]
+}

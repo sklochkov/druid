@@ -25,6 +25,7 @@ import com.fasterxml.jackson.annotation.JsonTypeName;
 import com.google.inject.Provider;
 import org.apache.druid.java.util.common.IAE;
 import org.apache.druid.java.util.common.logger.Logger;
+import org.apache.druid.security.basic.BasicAuthUtils;
 import org.apache.druid.security.basic.BasicSecurityAuthenticationException;
 import org.apache.druid.security.basic.authentication.db.cache.BasicAuthenticatorCacheManager;
 import org.apache.druid.security.basic.authentication.entity.BasicAuthenticatorCredentials;
@@ -33,7 +34,7 @@ import org.apache.druid.server.security.Access;
 import org.apache.druid.server.security.AuthenticationResult;
 
 import javax.annotation.Nullable;
-import java.util.Arrays;
+import java.security.MessageDigest;
 import java.util.Map;
 
 @JsonTypeName("metadata")
@@ -42,6 +43,14 @@ public class MetadataStoreCredentialsValidator implements CredentialsValidator
   private static final Logger LOG = new Logger(MetadataStoreCredentialsValidator.class);
   private final Provider<BasicAuthenticatorCacheManager> cacheManager;
   private final PasswordHashGenerator hashGenerator = new PasswordHashGenerator();
+
+  /**
+   * Dummy salt and iterations used when a user is not found, to prevent
+   * timing-based username enumeration (CVE-2026-23906). The hash computation
+   * takes roughly the same time regardless of whether the user exists.
+   */
+  private final byte[] dummySalt = BasicAuthUtils.generateSalt();
+  private static final int DUMMY_ITERATIONS = BasicAuthUtils.DEFAULT_KEY_ITERATIONS;
 
   @JsonCreator
   public MetadataStoreCredentialsValidator(
@@ -66,11 +75,13 @@ public class MetadataStoreCredentialsValidator implements CredentialsValidator
     }
 
     BasicAuthenticatorUser user = userMap.get(username);
-    if (user == null) {
-      return null;
-    }
-    BasicAuthenticatorCredentials credentials = user.getCredentials();
+    BasicAuthenticatorCredentials credentials = (user != null) ? user.getCredentials() : null;
+
     if (credentials == null) {
+      // User doesn't exist or has no credentials. Perform a dummy hash computation
+      // to prevent timing-based username enumeration (CVE-2026-23906).
+      hashGenerator.getOrComputePasswordHash(password, dummySalt, DUMMY_ITERATIONS);
+      LOG.debug("Authentication failed for user [%s]", username);
       return null;
     }
 
@@ -80,10 +91,11 @@ public class MetadataStoreCredentialsValidator implements CredentialsValidator
         credentials.getIterations()
     );
 
-    if (Arrays.equals(recalculatedHash, credentials.getHash())) {
+    // Use constant-time comparison to prevent timing side-channel attacks (CVE-2026-23906)
+    if (MessageDigest.isEqual(recalculatedHash, credentials.getHash())) {
       return new AuthenticationResult(username, authorizerName, authenticatorName, null);
     } else {
-      LOG.debug("Password incorrect for metadata store user %s", username);
+      LOG.debug("Authentication failed for user [%s]", username);
       throw new BasicSecurityAuthenticationException(Access.DEFAULT_ERROR_MESSAGE);
     }
   }

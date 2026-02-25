@@ -26,9 +26,9 @@ import org.apache.druid.security.basic.authentication.entity.BasicAuthenticatorC
 import org.apache.druid.security.basic.authentication.validator.PasswordHashGenerator;
 
 import javax.naming.directory.SearchResult;
+import java.security.MessageDigest;
 import java.security.Principal;
 import java.time.Instant;
-import java.util.Arrays;
 import java.util.Objects;
 import java.util.concurrent.atomic.AtomicReference;
 
@@ -99,7 +99,8 @@ public class LdapUserPrincipal implements Principal
         this.credentials.getSalt(),
         this.credentials.getIterations()
     );
-    if (Arrays.equals(recalculatedHash, credentials.getHash())) {
+    // Use constant-time comparison to prevent timing side-channel attacks (CVE-2026-23906)
+    if (MessageDigest.isEqual(recalculatedHash, credentials.getHash())) {
       this.lastVerified.set(Instant.now());
       LOG.debug("Refereshing lastVerified principal user '%s'", this.name);
       return true;

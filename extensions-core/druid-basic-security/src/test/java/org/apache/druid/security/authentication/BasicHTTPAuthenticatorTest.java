@@ -140,7 +140,8 @@ public class BasicHTTPAuthenticatorTest
     EasyMock.replay(req);
 
     HttpServletResponse resp = EasyMock.createMock(HttpServletResponse.class);
-    resp.sendError(HttpServletResponse.SC_UNAUTHORIZED, "User authentication failed.");
+    // CVE-2026-23906: sendError without message to prevent user enumeration
+    resp.sendError(HttpServletResponse.SC_UNAUTHORIZED);
     EasyMock.expectLastCall().times(1);
     EasyMock.replay(resp);
 
@@ -186,7 +187,8 @@ public class BasicHTTPAuthenticatorTest
     EasyMock.replay(req);
 
     HttpServletResponse resp = EasyMock.createMock(HttpServletResponse.class);
-    resp.sendError(HttpServletResponse.SC_UNAUTHORIZED, "User authentication failed.");
+    // CVE-2026-23906: sendError without message to prevent user enumeration
+    resp.sendError(HttpServletResponse.SC_UNAUTHORIZED);
     EasyMock.expectLastCall().times(1);
     EasyMock.replay(resp);
 

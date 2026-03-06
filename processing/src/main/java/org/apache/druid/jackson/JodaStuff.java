@@ -117,7 +117,7 @@ class JodaStuff
         // make sure to preserve time zone information when parsing timestamps
         return DateTimes.ISO_DATE_OR_TIME_WITH_OFFSET.parse(str);
       }
-      throw ctxt.mappingException(getValueClass());
+      throw ctxt.wrongTokenException(jp, handledType(), t, "expected VALUE_NUMBER_INT or VALUE_STRING");
     }
   }
 }

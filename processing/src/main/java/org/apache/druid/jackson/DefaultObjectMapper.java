@@ -21,6 +21,8 @@ package org.apache.druid.jackson;
 
 import com.fasterxml.jackson.core.JsonFactory;
 import com.fasterxml.jackson.core.JsonGenerator;
+import com.fasterxml.jackson.core.StreamReadConstraints;
+import com.fasterxml.jackson.core.StreamWriteConstraints;
 import com.fasterxml.jackson.databind.DeserializationContext;
 import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.JavaType;
@@ -84,6 +86,21 @@ public class DefaultObjectMapper extends ObjectMapper
     // Disable automatic JSON termination, so readers can detect truncated responses when a JsonGenerator is
     // closed after an exception is thrown while writing.
     configure(JsonGenerator.Feature.AUTO_CLOSE_JSON_CONTENT, false);
+
+    // Jackson 2.15+ enforces StreamReadConstraints by default (max string length, number length, nesting depth).
+    // Druid processes large JSON payloads, so we disable these limits to maintain backward compatibility.
+    getFactory().setStreamReadConstraints(
+        StreamReadConstraints.builder()
+            .maxStringLength(Integer.MAX_VALUE)
+            .maxNumberLength(Integer.MAX_VALUE)
+            .maxNestingDepth(Integer.MAX_VALUE)
+            .build()
+    );
+    getFactory().setStreamWriteConstraints(
+        StreamWriteConstraints.builder()
+            .maxNestingDepth(Integer.MAX_VALUE)
+            .build()
+    );
 
     addHandler(new DefaultDeserializationProblemHandler(serviceName));
   }

@@ -75,10 +75,9 @@ public class StandardResponseHeaderFilterHolder implements ServletFilterHolder
   {
     for (final String headerName : StandardResponseHeaderFilterHolder.STANDARD_HEADERS) {
       if (serverResponse.getHeaders().contains(headerName) && proxyResponse.containsHeader(headerName)) {
-        // In Jetty 12, we need to use the mutable headers interface
-        org.eclipse.jetty.server.Response jettyResponse =
-            (org.eclipse.jetty.server.Response) proxyResponse;
-        HttpFields.Mutable mutableHeaders = jettyResponse.getHeaders();
+        org.eclipse.jetty.ee8.nested.Response jettyResponse =
+            (org.eclipse.jetty.ee8.nested.Response) proxyResponse;
+        HttpFields.Mutable mutableHeaders = jettyResponse.getHttpFields();
         mutableHeaders.remove(headerName);
       }
     }

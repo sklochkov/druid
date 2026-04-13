@@ -144,6 +144,10 @@
             <artifactId>tesla-aether</artifactId>
         </dependency>
         <dependency>
+            <groupId>org.codehaus.plexus</groupId>
+            <artifactId>plexus-xml</artifactId>
+        </dependency>
+        <dependency>
             <groupId>com.amazonaws</groupId>
             <artifactId>elasticache-java-cluster-client</artifactId>
         </dependency>
@@ -498,6 +502,7 @@
                     <usedDependencies>
                         <!-- These are needed for scope: compile -->
                         <dependency>io.tesla.aether:tesla-aether</dependency>
+                        <dependency>org.codehaus.plexus:plexus-xml</dependency>
                         <!-- These are needed for scope: runtime -->
                         <dependency>org.xerial.snappy:snappy-java</dependency>
                     </usedDependencies>

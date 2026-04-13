@@ -1977,7 +1977,7 @@ name: Plexus Common Utilities
 license_category: binary
 module: java-core
 license_name: Apache License version 2.0
-version: 3.6.1
+version: 4.0.3
 libraries:
   - org.codehaus.plexus: plexus-utils
 notices:

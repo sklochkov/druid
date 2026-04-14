@@ -24,6 +24,7 @@ import org.asynchttpclient.DefaultAsyncHttpClient;
 import org.junit.Assert;
 import org.junit.Test;
 
+import java.time.Duration;
 import java.io.BufferedReader;
 import java.io.InputStreamReader;
 import java.io.OutputStream;
@@ -81,7 +82,7 @@ public class AsyncHttpClientTest
       requestStart = System.currentTimeMillis();
       Future<?> future = client
           .prepareGet(StringUtils.format("http://localhost:%d/", serverSocket.getLocalPort()))
-          .setRequestTimeout(2000)
+          .setRequestTimeout(Duration.ofMillis(2000))
           .execute();
       System.out.println("created future in: " + (System.currentTimeMillis() - requestStart));
       future.get(3000, TimeUnit.MILLISECONDS);
@@ -103,7 +104,7 @@ public class AsyncHttpClientTest
     try {
       Future<?> future = client
           .prepareGet(StringUtils.format("http://localhost:%d/", serverSocket.getLocalPort()))
-          .setRequestTimeout(100)
+          .setRequestTimeout(Duration.ofMillis(100))
           .execute();
       future.get();
     }

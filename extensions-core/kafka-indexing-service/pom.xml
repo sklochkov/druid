@@ -55,7 +55,6 @@
     <dependency>
       <groupId>org.apache.kafka</groupId>
       <artifactId>kafka-clients</artifactId>
-      <version>${apache.kafka.version}</version>
       <exclusions>
         <exclusion>
           <groupId>org.slf4j</groupId>

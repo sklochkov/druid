@@ -385,6 +385,11 @@
                 <artifactId>ant</artifactId>
                 <version>1.10.14</version>
             </dependency>
+            <dependency>
+                <groupId>org.apache.kafka</groupId>
+                <artifactId>kafka-clients</artifactId>
+                <version>${apache.kafka.version}</version>
+            </dependency>
             <!-- transitive dependency of kafka-clients and kubernetes client
             this should get resolved with the update of above depdendencies -->
             <dependency>

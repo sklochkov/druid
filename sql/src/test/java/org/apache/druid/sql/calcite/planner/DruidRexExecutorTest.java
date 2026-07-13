@@ -234,9 +234,9 @@ public class DruidRexExecutorTest extends InitializedNullHandlingTest
   {
     DruidRexExecutor rexy = new DruidRexExecutor(PLANNER_CONTEXT);
     List<RexNode> reduced = new ArrayList<>();
-    BasicSqlType basicSqlType = new BasicSqlType(DruidTypeSystem.INSTANCE, SqlTypeName.DECIMAL);
+    BasicSqlType basicSqlType = new BasicSqlType(DruidTypeSystem.INSTANCE, SqlTypeName.DOUBLE);
     ArraySqlType arraySqlType = new ArraySqlType(basicSqlType, false);
-    List<BigDecimal> elements = ImmutableList.of(BigDecimal.valueOf(50.12), BigDecimal.valueOf(12.1));
+    List<Double> elements = ImmutableList.of(50.12, 12.1);
     RexNode literal = rexBuilder.makeLiteral(elements, arraySqlType, true);
     rexy.reduce(rexBuilder, ImmutableList.of(literal), reduced);
     Assert.assertEquals(1, reduced.size());

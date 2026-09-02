@@ -81,7 +81,7 @@ After build completes, verify Netty 3 is gone:
 mvn dependency:tree | grep netty
 
 # Should see only:
-# io.netty:netty-* (Netty 4.1.128.Final)
+# io.netty:netty-* (Netty 4.2.16.Final)
 # No org.jboss.netty
 ```
 
@@ -89,7 +89,7 @@ mvn dependency:tree | grep netty
 
 ## Production Deployment Checklist
 
-- [x] Code migrated to Netty 4.1.128.Final
+- [x] Code migrated to Netty 4.2.16.Final
 - [x] Netty 3 dependencies removed
 - [x] Modules compile successfully
 - [x] Critical tests verified (HTTP client, individual query tests)

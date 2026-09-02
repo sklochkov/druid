@@ -24,7 +24,8 @@ import com.google.common.util.concurrent.ThreadFactoryBuilder;
 import io.netty.bootstrap.Bootstrap;
 import io.netty.channel.ChannelOption;
 import io.netty.channel.EventLoopGroup;
-import io.netty.channel.nio.NioEventLoopGroup;
+import io.netty.channel.MultiThreadIoEventLoopGroup;
+import io.netty.channel.nio.NioIoHandler;
 import io.netty.channel.socket.nio.NioSocketChannel;
 import io.netty.util.HashedWheelTimer;
 import io.netty.util.internal.logging.InternalLoggerFactory;
@@ -87,14 +88,13 @@ public class HttpClientInit
           }
       );
 
-      // Netty 4 uses EventLoopGroup instead of NioClientBossPool/NioWorkerPool
-      // We typically only need one EventLoopGroup for the client.
-      final EventLoopGroup workerGroup = new NioEventLoopGroup(
+      final EventLoopGroup workerGroup = new MultiThreadIoEventLoopGroup(
           config.getWorkerPoolSize(),
           new ThreadFactoryBuilder()
               .setDaemon(true)
               .setNameFormat("HttpClient-Netty-Worker-%s")
-              .build()
+              .build(),
+          NioIoHandler.newFactory()
       );
 
       final Bootstrap bootstrap = new Bootstrap();

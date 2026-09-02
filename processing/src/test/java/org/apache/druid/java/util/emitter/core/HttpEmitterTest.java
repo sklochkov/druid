@@ -56,8 +56,7 @@ public class HttpEmitterTest
       @Override
       protected ListenableFuture<Response> go(Request request)
       {
-        int timeout = request.getRequestTimeout();
-        timeoutUsed.set(timeout);
+        timeoutUsed.set(request.getRequestTimeout().toMillis());
         return GoHandlers.immediateFuture(EmitterTest.okResponse());
       }
     });

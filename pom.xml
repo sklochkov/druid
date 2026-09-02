@@ -105,8 +105,7 @@
 	<log4j.version>2.25.5</log4j.version>
         <mysql.version>8.2.0</mysql.version>
         <mariadb.version>2.7.3</mariadb.version>
-        <netty4.version>4.1.137.Final</netty4.version>
-        <netty42.version>4.2.16.Final</netty42.version>
+        <netty4.version>4.2.16.Final</netty4.version>
         <postgresql.version>42.7.2</postgresql.version>
         <protobuf.version>3.25.5</protobuf.version>
         <resilience4j.version>1.3.1</resilience4j.version>
@@ -782,17 +781,6 @@
                 <scope>import</scope>
                 <type>pom</type>
             </dependency>
-            <!-- AsyncHttpClient 3.x uses Netty 4.2's split codec modules. -->
-            <dependency>
-                <groupId>io.netty</groupId>
-                <artifactId>netty-codec-base</artifactId>
-                <version>${netty42.version}</version>
-            </dependency>
-            <dependency>
-                <groupId>io.netty</groupId>
-                <artifactId>netty-codec-compression</artifactId>
-                <version>${netty42.version}</version>
-            </dependency>
             <dependency>
                 <groupId>joda-time</groupId>
                 <artifactId>joda-time</artifactId>
@@ -1012,7 +1000,7 @@
             <dependency>
                 <groupId>org.asynchttpclient</groupId>
                 <artifactId>async-http-client</artifactId>
-                <!-- Uses Netty 4.1.x -->
+                <!-- Uses Netty 4.2.x -->
                 <version>3.0.11</version>
             </dependency>
             <dependency>
@@ -1161,7 +1149,7 @@
             <dependency>
                 <groupId>com.github.docker-java</groupId>
                 <artifactId>docker-java-bom</artifactId>
-                <version>3.3.4</version>
+                <version>3.5.3</version>
                 <scope>import</scope>
                 <type>pom</type>
             </dependency>

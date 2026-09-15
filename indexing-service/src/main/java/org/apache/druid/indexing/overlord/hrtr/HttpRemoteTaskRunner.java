@@ -40,6 +40,7 @@ import com.google.common.util.concurrent.ListenableScheduledFuture;
 import com.google.common.util.concurrent.ListeningScheduledExecutorService;
 import com.google.common.util.concurrent.MoreExecutors;
 import com.google.errorprone.annotations.concurrent.GuardedBy;
+import io.netty.handler.codec.http.HttpMethod;
 import org.apache.curator.framework.CuratorFramework;
 import org.apache.druid.concurrent.LifecycleLock;
 import org.apache.druid.discovery.DiscoveryDruidNode;
@@ -86,7 +87,6 @@ import org.apache.druid.java.util.http.client.response.InputStreamResponseHandle
 import org.apache.druid.server.initialization.IndexerZkConfig;
 import org.apache.druid.tasklogs.TaskLogStreamer;
 import org.apache.zookeeper.KeeperException;
-import io.netty.handler.codec.http.HttpMethod;
 import org.joda.time.Duration;
 import org.joda.time.Period;
 
@@ -131,6 +131,7 @@ import java.util.stream.Collectors;
 public class HttpRemoteTaskRunner implements WorkerTaskRunner, TaskLogStreamer
 {
   private static final EmittingLogger log = new EmittingLogger(HttpRemoteTaskRunner.class);
+  private static final long EXECUTOR_SHUTDOWN_TIMEOUT_SECONDS = 5;
 
   private final LifecycleLock lifecycleLock = new LifecycleLock();
 
@@ -1391,7 +1392,6 @@ public class HttpRemoteTaskRunner implements WorkerTaskRunner, TaskLogStreamer
         provisioningService.close();
       }
       pendingTasksExec.shutdownNow();
-      workersSyncExec.shutdownNow();
       cleanupExec.shutdown();
 
       log.info("Removing listener");
@@ -1409,6 +1409,14 @@ public class HttpRemoteTaskRunner implements WorkerTaskRunner, TaskLogStreamer
             log.error(e, e.getMessage());
           }
         });
+      }
+
+      if (!Execs.shutdownAndAwaitTermination(
+          workersSyncExec,
+          EXECUTOR_SHUTDOWN_TIMEOUT_SECONDS,
+          TimeUnit.SECONDS
+      )) {
+        log.warn("Worker sync executor did not terminate cleanly.");
       }
     }
     finally {

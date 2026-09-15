@@ -46,6 +46,7 @@ import java.net.URL;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 
@@ -102,6 +103,9 @@ public class ChangeRequestHttpSyncer<T>
   @Nullable
   private ChangeRequestHistory.Counter counter = null;
 
+  @Nullable
+  private ListenableFuture<InputStream> syncRequestFuture = null;
+
   public ChangeRequestHttpSyncer(
       ObjectMapper smileMapper,
       HttpClient httpClient,
@@ -151,6 +155,7 @@ public class ChangeRequestHttpSyncer<T>
 
   public void stop()
   {
+    final ListenableFuture<InputStream> requestToCancel;
     synchronized (startStopLock) {
       if (!startStopLock.canStop()) {
         throw new ISE("Could not stop sync for server[%s].", logIdentity);
@@ -162,7 +167,13 @@ public class ChangeRequestHttpSyncer<T>
         startStopLock.exitStop();
       }
 
+      requestToCancel = syncRequestFuture;
+      syncRequestFuture = null;
       log.info("Stopped sync for server[%s].", logIdentity);
+    }
+
+    if (requestToCancel != null) {
+      requestToCancel.cancel(true);
     }
   }
 
@@ -243,7 +254,7 @@ public class ChangeRequestHttpSyncer<T>
 
       log.debug("Sending sync request to server[%s]", logIdentity);
 
-      ListenableFuture<InputStream> syncRequestFuture = httpClient.go(
+      final ListenableFuture<InputStream> requestFuture = httpClient.go(
           new Request(HttpMethod.GET, new URL(baseServerURL, req))
               .addHeader("Accept", SmileMediaTypes.APPLICATION_JACKSON_SMILE)
               .addHeader("Content-Type", SmileMediaTypes.APPLICATION_JACKSON_SMILE),
@@ -253,100 +264,110 @@ public class ChangeRequestHttpSyncer<T>
 
       log.debug("Sent sync request to [%s]", logIdentity);
 
-      Futures.addCallback(
-          syncRequestFuture,
-          new FutureCallback<InputStream>()
-          {
-            @Override
-            public void onSuccess(InputStream stream)
-            {
-              synchronized (startStopLock) {
-                if (!startStopLock.awaitStarted(1, TimeUnit.MILLISECONDS)) {
-                  log.info("Not handling response for server[%s] as syncer has not started yet.", logIdentity);
-                  return;
-                }
+      synchronized (startStopLock) {
+        if (!startStopLock.awaitStarted(1, TimeUnit.MILLISECONDS)) {
+          requestFuture.cancel(true);
+          return;
+        }
 
-                try {
-                  final int responseCode = responseHandler.getStatus();
-                  if (responseCode == HttpServletResponse.SC_NO_CONTENT) {
-                    log.debug("Received NO CONTENT from server[%s]", logIdentity);
+        syncRequestFuture = requestFuture;
+        Futures.addCallback(
+            requestFuture,
+            new FutureCallback<InputStream>()
+            {
+              @Override
+              public void onSuccess(InputStream stream)
+              {
+                synchronized (startStopLock) {
+                  clearSyncRequestFuture(requestFuture);
+                  if (!startStopLock.awaitStarted(1, TimeUnit.MILLISECONDS)) {
+                    log.info("Not handling response for server[%s] as syncer has not started yet.", logIdentity);
+                    return;
+                  }
+
+                  try {
+                    final int responseCode = responseHandler.getStatus();
+                    if (responseCode == HttpServletResponse.SC_NO_CONTENT) {
+                      log.debug("Received NO CONTENT from server[%s]", logIdentity);
+                      safeRestart(sinceLastSyncSuccess);
+                      return;
+                    } else if (responseCode != HttpServletResponse.SC_OK) {
+                      handleFailure(new ISE("Received sync response [%d]", responseCode));
+                      return;
+                    }
+
+                    log.debug("Received sync response from server[%s]", logIdentity);
+                    ChangeRequestsSnapshot<T> changes = smileMapper.readValue(stream, responseTypeReferences);
+                    log.debug("Finished reading sync response from server[%s]", logIdentity);
+
+                    if (changes.isResetCounter()) {
+                      log.info("Server[%s] requested resetCounter for reason[%s].", logIdentity, changes.getResetCause());
+                      counter = null;
+                      return;
+                    }
+
+                    if (counter == null) {
+                      listener.fullSync(changes.getRequests());
+                    } else {
+                      listener.deltaSync(changes.getRequests());
+                    }
+
+                    counter = changes.getCounter();
+
+                    if (initializationLatch.getCount() > 0) {
+                      initializationLatch.countDown();
+                      log.info("Server[%s] synced successfully for the first time.", logIdentity);
+                    }
+
+                    if (consecutiveFailedAttemptCount > 0) {
+                      consecutiveFailedAttemptCount = 0;
+                      sinceUnstable.reset();
+                      log.info("Server[%s] synced successfully.", logIdentity);
+                    }
+
                     safeRestart(sinceLastSyncSuccess);
-                    return;
-                  } else if (responseCode != HttpServletResponse.SC_OK) {
-                    handleFailure(new ISE("Received sync response [%d]", responseCode));
-                    return;
                   }
-
-                  log.debug("Received sync response from server[%s]", logIdentity);
-                  ChangeRequestsSnapshot<T> changes = smileMapper.readValue(stream, responseTypeReferences);
-                  log.debug("Finished reading sync response from server[%s]", logIdentity);
-
-                  if (changes.isResetCounter()) {
-                    log.info("Server[%s] requested resetCounter for reason[%s].", logIdentity, changes.getResetCause());
-                    counter = null;
-                    return;
+                  catch (Exception ex) {
+                    markServerUnstableAndAlert(ex, "Processing Response");
                   }
-
-                  if (counter == null) {
-                    listener.fullSync(changes.getRequests());
-                  } else {
-                    listener.deltaSync(changes.getRequests());
+                  finally {
+                    addNextSyncToWorkQueue();
                   }
-
-                  counter = changes.getCounter();
-
-                  if (initializationLatch.getCount() > 0) {
-                    initializationLatch.countDown();
-                    log.info("Server[%s] synced successfully for the first time.", logIdentity);
-                  }
-
-                  if (consecutiveFailedAttemptCount > 0) {
-                    consecutiveFailedAttemptCount = 0;
-                    sinceUnstable.reset();
-                    log.info("Server[%s] synced successfully.", logIdentity);
-                  }
-
-                  safeRestart(sinceLastSyncSuccess);
-                }
-                catch (Exception ex) {
-                  markServerUnstableAndAlert(ex, "Processing Response");
-                }
-                finally {
-                  addNextSyncToWorkQueue();
                 }
               }
-            }
 
-            @Override
-            public void onFailure(Throwable t)
-            {
-              synchronized (startStopLock) {
-                if (!startStopLock.awaitStarted(1, TimeUnit.MILLISECONDS)) {
-                  log.info("Not handling sync failure for server[%s] as syncer has not started yet.", logIdentity);
-                  return;
-                }
+              @Override
+              public void onFailure(Throwable t)
+              {
+                synchronized (startStopLock) {
+                  clearSyncRequestFuture(requestFuture);
+                  if (!startStopLock.awaitStarted(1, TimeUnit.MILLISECONDS)) {
+                    log.info("Not handling sync failure for server[%s] as syncer has not started yet.", logIdentity);
+                    return;
+                  }
 
-                try {
-                  handleFailure(t);
-                }
-                finally {
-                  addNextSyncToWorkQueue();
+                  try {
+                    handleFailure(t);
+                  }
+                  finally {
+                    addNextSyncToWorkQueue();
+                  }
                 }
               }
-            }
 
-            private void handleFailure(Throwable t)
-            {
-              String logMsg = StringUtils.format(
-                  "Handling response with code[%d], description[%s]",
-                  responseHandler.getStatus(),
-                  responseHandler.getDescription()
-              );
-              markServerUnstableAndAlert(t, logMsg);
-            }
-          },
-          executor
-      );
+              private void handleFailure(Throwable t)
+              {
+                String logMsg = StringUtils.format(
+                    "Handling response with code[%d], description[%s]",
+                    responseHandler.getStatus(),
+                    responseHandler.getDescription()
+                );
+                markServerUnstableAndAlert(t, logMsg);
+              }
+            },
+            this::executeCallback
+        );
+      }
     }
     catch (Throwable th) {
       try {
@@ -354,6 +375,27 @@ public class ChangeRequestHttpSyncer<T>
       }
       finally {
         addNextSyncToWorkQueue();
+      }
+    }
+  }
+
+  private void clearSyncRequestFuture(ListenableFuture<InputStream> completedFuture)
+  {
+    if (syncRequestFuture == completedFuture) {
+      syncRequestFuture = null;
+    }
+  }
+
+  private void executeCallback(Runnable callback)
+  {
+    try {
+      executor.execute(callback);
+    }
+    catch (RejectedExecutionException e) {
+      if (!startStopLock.isStarted()) {
+        log.debug("Discarding callback for stopped syncer[%s].", logIdentity);
+      } else {
+        throw e;
       }
     }
   }

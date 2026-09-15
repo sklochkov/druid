@@ -40,6 +40,7 @@ import org.apache.druid.java.util.common.IAE;
 import org.apache.druid.java.util.common.ISE;
 import org.apache.druid.java.util.common.Pair;
 import org.apache.druid.java.util.common.RE;
+import org.apache.druid.java.util.common.concurrent.Execs;
 import org.apache.druid.java.util.common.concurrent.ScheduledExecutorFactory;
 import org.apache.druid.java.util.common.concurrent.ScheduledExecutors;
 import org.apache.druid.java.util.common.lifecycle.LifecycleStart;
@@ -85,6 +86,8 @@ import java.util.concurrent.atomic.AtomicBoolean;
  */
 public class HttpServerInventoryView implements ServerInventoryView, FilteredServerInventoryView
 {
+  private static final long EXECUTOR_SHUTDOWN_TIMEOUT_SECONDS = 5;
+
   public static final TypeReference<ChangeRequestsSnapshot<DataSegmentChangeRequest>> SEGMENT_LIST_RESP_TYPE_REF =
       new TypeReference<ChangeRequestsSnapshot<DataSegmentChangeRequest>>() {};
 
@@ -115,6 +118,7 @@ public class HttpServerInventoryView implements ServerInventoryView, FilteredSer
   private final ScheduledExecutorFactory executorFactory;
   private volatile ScheduledExecutorService inventorySyncExecutor;
   private volatile ScheduledExecutorService monitoringExecutor;
+  private volatile DruidNodeDiscovery.Listener nodeDiscoveryListener;
 
   private final HttpClient httpClient;
   private final ObjectMapper smileMapper;
@@ -162,66 +166,65 @@ public class HttpServerInventoryView implements ServerInventoryView, FilteredSer
         monitoringExecutor = executorFactory.create(1, execNamePrefix + "-monitor-%s");
 
         DruidNodeDiscovery druidNodeDiscovery = druidNodeDiscoveryProvider.getForService(DataNodeService.DISCOVERY_SERVICE_KEY);
-        druidNodeDiscovery.registerListener(
-            new DruidNodeDiscovery.Listener()
-            {
-              private final AtomicBoolean initialized = new AtomicBoolean(false);
+        nodeDiscoveryListener = new DruidNodeDiscovery.Listener()
+        {
+          private final AtomicBoolean initialized = new AtomicBoolean(false);
 
-              @Override
-              public void nodesAdded(Collection<DiscoveryDruidNode> nodes)
-              {
-                nodes.forEach(node -> serverAdded(toDruidServer(node)));
-              }
+          @Override
+          public void nodesAdded(Collection<DiscoveryDruidNode> nodes)
+          {
+            nodes.forEach(node -> serverAdded(toDruidServer(node)));
+          }
 
-              @Override
-              public void nodesRemoved(Collection<DiscoveryDruidNode> nodes)
-              {
-                nodes.forEach(node -> serverRemoved(toDruidServer(node)));
-              }
+          @Override
+          public void nodesRemoved(Collection<DiscoveryDruidNode> nodes)
+          {
+            nodes.forEach(node -> serverRemoved(toDruidServer(node)));
+          }
 
-              @Override
-              public void nodeViewInitialized()
-              {
-                if (!initialized.getAndSet(true)) {
-                  inventorySyncExecutor.execute(HttpServerInventoryView.this::serverInventoryInitialized);
-                }
-              }
-
-              @Override
-              public void nodeViewInitializedTimedOut()
-              {
-                nodeViewInitialized();
-              }
-
-              private DruidServer toDruidServer(DiscoveryDruidNode node)
-              {
-                final DruidNode druidNode = node.getDruidNode();
-                final DataNodeService dataNodeService = node.getService(DataNodeService.DISCOVERY_SERVICE_KEY, DataNodeService.class);
-                if (dataNodeService == null) {
-                  // this shouldn't typically happen, but just in case it does, make a dummy server to allow the
-                  // callbacks to continue since serverAdded/serverRemoved only need node.getName()
-                  return new DruidServer(
-                      druidNode.getHostAndPortToUse(),
-                      druidNode.getHostAndPort(),
-                      druidNode.getHostAndTlsPort(),
-                      0L,
-                      ServerType.fromNodeRole(node.getNodeRole()),
-                      DruidServer.DEFAULT_TIER,
-                      DruidServer.DEFAULT_PRIORITY
-                  );
-                }
-                return new DruidServer(
-                    druidNode.getHostAndPortToUse(),
-                    druidNode.getHostAndPort(),
-                    druidNode.getHostAndTlsPort(),
-                    dataNodeService.getMaxSize(),
-                    dataNodeService.getServerType(),
-                    dataNodeService.getTier(),
-                    dataNodeService.getPriority()
-                );
-              }
+          @Override
+          public void nodeViewInitialized()
+          {
+            if (!initialized.getAndSet(true)) {
+              inventorySyncExecutor.execute(HttpServerInventoryView.this::serverInventoryInitialized);
             }
-        );
+          }
+
+          @Override
+          public void nodeViewInitializedTimedOut()
+          {
+            nodeViewInitialized();
+          }
+
+          private DruidServer toDruidServer(DiscoveryDruidNode node)
+          {
+            final DruidNode druidNode = node.getDruidNode();
+            final DataNodeService dataNodeService = node.getService(DataNodeService.DISCOVERY_SERVICE_KEY, DataNodeService.class);
+            if (dataNodeService == null) {
+              // this shouldn't typically happen, but just in case it does, make a dummy server to allow the
+              // callbacks to continue since serverAdded/serverRemoved only need node.getName()
+              return new DruidServer(
+                  druidNode.getHostAndPortToUse(),
+                  druidNode.getHostAndPort(),
+                  druidNode.getHostAndTlsPort(),
+                  0L,
+                  ServerType.fromNodeRole(node.getNodeRole()),
+                  DruidServer.DEFAULT_TIER,
+                  DruidServer.DEFAULT_PRIORITY
+              );
+            }
+            return new DruidServer(
+                druidNode.getHostAndPortToUse(),
+                druidNode.getHostAndPort(),
+                druidNode.getHostAndTlsPort(),
+                dataNodeService.getMaxSize(),
+                dataNodeService.getServerType(),
+                dataNodeService.getTier(),
+                dataNodeService.getPriority()
+            );
+          }
+        };
+        druidNodeDiscovery.registerListener(nodeDiscoveryListener);
 
         ScheduledExecutors.scheduleWithFixedDelay(
             monitoringExecutor,
@@ -256,14 +259,31 @@ public class HttpServerInventoryView implements ServerInventoryView, FilteredSer
 
       log.info("Stopping executor[%s].", execNamePrefix);
 
-      if (inventorySyncExecutor != null) {
-        inventorySyncExecutor.shutdownNow();
+      DruidNodeDiscovery.Listener listener = nodeDiscoveryListener;
+      if (listener != null) {
+        druidNodeDiscoveryProvider.getForService(DataNodeService.DISCOVERY_SERVICE_KEY).removeListener(listener);
       }
+
       if (monitoringExecutor != null) {
-        monitoringExecutor.shutdownNow();
+        shutdownExecutor(monitoringExecutor, "monitoring");
+      }
+
+      synchronized (servers) {
+        servers.values().forEach(DruidServerHolder::stop);
+      }
+
+      if (inventorySyncExecutor != null) {
+        shutdownExecutor(inventorySyncExecutor, "inventory sync");
       }
 
       log.info("Stopped executor[%s].", execNamePrefix);
+    }
+  }
+
+  private void shutdownExecutor(ScheduledExecutorService executor, String name)
+  {
+    if (!Execs.shutdownAndAwaitTermination(executor, EXECUTOR_SHUTDOWN_TIMEOUT_SECONDS, TimeUnit.SECONDS)) {
+      log.warn("%s executor[%s] did not terminate cleanly.", name, execNamePrefix);
     }
   }
 

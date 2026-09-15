@@ -44,6 +44,29 @@ import java.util.concurrent.TimeUnit;
 public class Execs
 {
   /**
+   * Stops accepting new work, waits for already submitted work, and interrupts it if it does not finish in time.
+   *
+   * @return true if the executor terminated within the graceful or forced timeout
+   */
+  public static boolean shutdownAndAwaitTermination(ExecutorService executor, long timeout, TimeUnit unit)
+  {
+    executor.shutdown();
+    try {
+      if (executor.awaitTermination(timeout, unit)) {
+        return true;
+      }
+
+      executor.shutdownNow();
+      return executor.awaitTermination(timeout, unit);
+    }
+    catch (InterruptedException e) {
+      executor.shutdownNow();
+      Thread.currentThread().interrupt();
+      return false;
+    }
+  }
+
+  /**
    * Returns an ExecutorService which is terminated and shutdown from the beginning and not able to accept any tasks.
    */
   public static ExecutorService dummy()
